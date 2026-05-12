@@ -9,7 +9,7 @@ The git habits that keep a solo bootstrapper sane as projects accumulate. The be
 
 ## Layout
 
-One repo per project under `~/projects/<project-name>/`. Each repo is independent — no submodules, no monorepo, no shared infrastructure across apps. When two projects genuinely share code, extract a pub.dev package; until then, copy-paste is cheaper than premature coupling.
+One repo per project under `~/Projects/<project-name>/`. Each repo is independent — no submodules, no monorepo, no shared infrastructure across apps. When two projects genuinely share code, extract a pub.dev package; until then, copy-paste is cheaper than premature coupling.
 
 ## Branch naming
 

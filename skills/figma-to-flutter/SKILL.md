@@ -7,7 +7,7 @@ description: Use this skill when translating Figma designs into Flutter widgets,
 
 The bridge between Figma source-of-truth and Flutter implementation. Two paths exist depending on Figma tier; pick once per project and stick with it.
 
-> **Status: working draft.** Path A is the only one tested in practice today. Path B activates once the Figma Pro decision is made — see `~/dotfiles/COMPANY.md` decisions log for current status.
+> **Status: working draft.** Path A is the only one tested in practice today. Path B activates once the Figma Pro decision is made — see `~/Projects/dotfiles/COMPANY.md` decisions log for current status.
 
 ## Path A — Manual token export (Figma free tier)
 

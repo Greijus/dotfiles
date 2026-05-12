@@ -20,7 +20,7 @@ The trigger to add structure is always a real signal — a user complaint, a rec
 
 ## Project layout
 
-One repo per app under `~/projects/<app-name>/`. Inside the repo:
+One repo per app under `~/Projects/<app-name>/`. Inside the repo:
 
 ```
 <app-name>/
@@ -36,7 +36,7 @@ One repo per app under `~/projects/<app-name>/`. Inside the repo:
 │   └── shared/                  # widgets used in 2+ features
 ├── test/
 ├── pubspec.yaml
-├── CLAUDE.md                    # routes to ~/dotfiles/CLAUDE.md + this skill
+├── CLAUDE.md                    # routes to ~/Projects/dotfiles/CLAUDE.md + this skill
 └── README.md
 ```
 
@@ -65,15 +65,15 @@ These are non-negotiable on every commit, because catching them early is free an
 
 Default order of operations:
 
-1. Confirm the app name and create `~/projects/<app-name>/`.
+1. Confirm the app name and create `~/Projects/<app-name>/`.
 2. `flutter create` with `--org com.genxlabs` and `--platforms android` (add ios/web later if explicitly scoped).
 3. Set up the layout above with empty placeholder files — don't backfill with speculative code.
 4. Add `analysis_options.yaml` extending `package:flutter_lints/flutter.yaml`.
 5. Initialise git, commit the scaffold as `chore(init): scaffold flutter project` (see `git-workflow` skill).
-6. Create `CLAUDE.md` at the repo root that routes to `~/dotfiles/CLAUDE.md` and lists project-specific context.
+6. Create `CLAUDE.md` at the repo root that routes to `~/Projects/dotfiles/CLAUDE.md` and lists project-specific context.
 
 ## What this skill explicitly doesn't cover
 
-- Git workflow → see `~/dotfiles/skills/git-workflow/SKILL.md`
-- Translating Figma designs → see `~/dotfiles/skills/figma-to-flutter/SKILL.md`
+- Git workflow → see `~/Projects/dotfiles/skills/git-workflow/SKILL.md`
+- Translating Figma designs → see `~/Projects/dotfiles/skills/figma-to-flutter/SKILL.md`
 - Backend / Supabase setup → not yet a skill; revisit when the first app needs server state.
