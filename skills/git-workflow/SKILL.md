@@ -82,6 +82,41 @@ When asked to review a staged or unstaged diff, check in this order:
 4. **Naming** — variable, function, and file names match the rest of the project? Inconsistency now becomes friction later.
 5. **Message** — would the subject line make sense to a stranger six months from now? Rewrite if not.
 
+## Staging is fine; committing is the operator's job
+
+Claude may stage files with any `git add` form — staging is reversible (`git restore --staged <path>` undoes it). Prefer explicit `git add <path>` over `-A` or `.` for visibility; it's a preference, not a ban.
+
+Claude does NOT run `git commit`. Ever. The operator reviews the staged set and runs the commit themselves — that's the final-eyes checkpoint.
+
+Two situations where Claude proactively stages without being asked:
+
+- The user says "stage X" → stage exactly X.
+- The user prompts just **`git`** (the bare word) — see The `git` shortcut below.
+
+Otherwise, Claude leaves edits in the working tree for the operator to stage.
+
+### The `git` shortcut — execution
+
+When the operator prompts just `git`:
+
+1. Run `git status` and `git diff` (staged + unstaged).
+2. **Detect stories.** A story is a coherent change describable in one subject line. The working tree is multi-story if either:
+   - Two or more files would each need their own subject and they aren't mechanically coupled, OR
+   - One file's diff bundles hunks a reviewer would describe as "X *and also* Y."
+3. **Single-story path:** stage every changed file. Propose a one-line subject (body only when a *why* exists that the subject can't carry; 1–2 lines max). STOP — the operator commits.
+4. **Multi-story path:** name each story Claude sees (1..N). Announce the split clearly. Stage only story 1:
+   - Whole-file stories: `git add <path>`.
+   - Sub-file stories: write a patch with only story 1's hunks and `git apply --cached <patch>`.
+
+   Propose story 1's message. STOP. Each subsequent `git` invocation handles the next story.
+5. **No questions.** If Claude's split is wrong, the operator corrects it after seeing the announcement.
+
+Never run `git commit` — the operator does.
+
+## Don't delete config files that have outlived their content
+
+If a `.gitignore`, `.editorconfig`, `.gitattributes`, or similar config file becomes empty after a change, **edit it to empty — do not delete it**. The file's presence is a signal that the project has chosen to manage that concern; future entries will accumulate there. Deleting and re-creating costs more than leaving an empty file.
+
 ## When something feels wrong
 
 If a workflow rule feels expensive in a specific moment, it usually means the situation is unusual (a hotfix, a one-off script, a personal experiment), not that the rule is wrong. The rules earn their keep over months, not minutes. Override deliberately, not silently — leave a note in the commit body when you do.
