@@ -36,7 +36,9 @@ Every commit follows the conventional commits spec:
 
 Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`.
 
-Subject is imperative, lowercase, no trailing period, under ~70 chars. The body explains *why*, not *what* — the diff already says what.
+Subject is imperative, lowercase, no trailing period, under ~70 chars.
+
+For atomic commits, **the body is usually unnecessary** — a clear subject says everything the diff doesn't. Only add a body when there's a *why* the subject can't carry: a non-obvious motivation, a hidden constraint, a referenced incident. When you do, keep it to **1–2 short lines**. If the body wants to grow into paragraphs, the change wants to split into multiple commits — not a longer message.
 
 **Examples:**
 
@@ -59,13 +61,16 @@ Open a PR even when working alone. The five minutes it takes to title and descri
 
 A commit either makes sense alone or it doesn't belong on its own. If a single commit message would need an "and" in the middle ("add streak counter and fix nav bug"), split it.
 
+**Atomicity applies to both the file set AND the message.** If you can't describe the change in one subject line plus at most 1–2 short body lines, the commit is doing too much. The fix is to split the diff, not to write a longer message.
+
 Indicators a commit is too big:
 
-- The diff touches more than ~5 files in unrelated parts of the tree.
 - The subject would need to be longer than 70 chars to be accurate.
+- The body wants to become paragraphs to cover everything in the diff.
+- The diff tells two stories — a reviewer would naturally describe it with "this commit does X *and also* Y."
 - You'd review it in two passes.
 
-When in doubt, stage by hunks (`git add -p`) and commit in logical chunks.
+Two files can ship in the same commit if they're **mechanically coupled** (one requires the other to be valid — e.g., removing a `.gitignore` line that hides a file you're adding in the same change). Conceptual relatedness ("both are docs", "both touch the new feature area") is not enough.
 
 ## Reviewing a diff before commit
 
