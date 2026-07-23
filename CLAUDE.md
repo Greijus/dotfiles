@@ -44,12 +44,14 @@ Apply to every language, every file, every turn.
 - **Self-explanatory names** — no abbreviations, no single letters. Functions are verbs (`getUserProfile`), booleans are questions (`isLoading`, `hasError`), constants are SCREAMING_SNAKE_CASE.
 - **Size limits** — ~50 lines per function, ~300 lines per file. Split when longer.
 - **One responsibility** per function, per file.
+- **SOLID** — apply all five, not just single responsibility. Smells, fixes, examples → `clean-code` skill.
 - **No magic numbers** — name them.
 - **No dead code** — delete it; git remembers.
 - **No copy-paste** — extract shared logic.
-- **Comments explain WHY**, not WHAT. Rewrite the code until naming makes the WHAT obvious.
+- **Comments explain WHY**, not WHAT, max 1–2 lines. Rewrite the code until naming makes the WHAT obvious.
 - **Guard clauses over deep nesting.** Max 3 levels of indentation in any function body.
 - **Loose coupling** — modules don't depend on each other's internals. Business logic stays separate from UI and from data access.
+- **Test what you write** — every new function or feature ships a unit test in the same change. Conventions and CI template → `clean-code` skill.
 
 Language-specific style (Effective Dart, Airbnb JS, etc.) lives in the relevant skill.
 
@@ -102,11 +104,12 @@ Project-specific rules go in `<project>/CLAUDE.md`, not in this global file.
 - **Flutter conventions** → `flutter-mvp` skill (auto-triggers on Dart work)
 - **Git workflow** → `git-workflow` skill (auto-triggers on commits, branches, PRs)
 - **Figma → Flutter** → `figma-to-flutter` skill (working draft; matures with practice)
+- **SOLID, testing, CI/CD** → `clean-code` skill (auto-triggers on new code, architecture calls, tests, CI setup)
 
 ---
 
 > Living document. Update when conventions actually change. When a rule hurts productivity, change it — don't suffer through it.
-> Last reviewed: 2026-05-12.
+> Last reviewed: 2026-07-23.
 
 ---
 

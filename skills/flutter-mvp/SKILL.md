@@ -65,4 +65,4 @@ Move a widget into `shared/` only when a second feature actually needs it.
 
 ## Not covered here
 
-Git workflow → `git-workflow` skill. Figma translation → `figma-to-flutter` skill. Backend/Supabase → not yet a skill.
+Git workflow → `git-workflow` skill. Figma translation → `figma-to-flutter` skill. SOLID/testing/CI detail → `clean-code` skill. Backend/Supabase → not yet a skill.
