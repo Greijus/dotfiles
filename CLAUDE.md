@@ -32,7 +32,7 @@ If something is ambiguous, ask before assuming.
 - **Web (future):** Next.js + Vercel — only when SEO or a public-facing site is required
 - **Backend (later):** Supabase free tier — only when shared state is needed
 - **Git:** conventional commits, feature branches, PR-even-when-solo → `git-workflow` skill
-- **Design → code:** Figma to Flutter → `figma-to-flutter` skill
+- **Design → code:** Figma → `figma-to-flutter` skill; Claude Artifact prototype → `artifact-to-flutter` skill
 - **AI orchestration:** Claude Code owns the codebase. Gemini and ChatGPT only feed input.
 
 ---
@@ -104,6 +104,7 @@ Project-specific rules go in `<project>/CLAUDE.md`, not in this global file.
 - **Flutter conventions** → `flutter-mvp` skill (auto-triggers on Dart work)
 - **Git workflow** → `git-workflow` skill (auto-triggers on commits, branches, PRs)
 - **Figma → Flutter** → `figma-to-flutter` skill (working draft; matures with practice)
+- **Claude Artifact prototype → Flutter** → `artifact-to-flutter` skill (working draft; matures with practice)
 - **SOLID, testing, CI/CD** → `clean-code` skill (auto-triggers on new code, architecture calls, tests, CI setup)
 
 ---
