@@ -5,118 +5,69 @@ description: Use this skill whenever committing code, branching, opening pull re
 
 # git-workflow
 
-The git habits that keep a solo bootstrapper sane as projects accumulate. The bet is that a 10-second discipline now saves a 30-minute archaeology dig in six months. Every rule below has paid for itself at least once.
+Solo-bootstrapper git discipline: atomic commits, conventional format, PR-even-when-solo. Claude stages files and drafts commit messages; the operator always runs the commit.
 
-## Layout
+## Repo layout
 
-One repo per project under `~/Projects/<project-name>/`. Each repo is independent — no submodules, no monorepo, no shared infrastructure across apps. When two projects genuinely share code, extract a pub.dev package; until then, copy-paste is cheaper than premature coupling.
+One repo per project under `~/Projects/<name>/`. No submodules, no monorepo — shared code across apps becomes a pub.dev package once duplication actually hurts, not before.
 
-## Branch naming
+## Branches
 
 ```
-main                  → always deployable
-feat/<short-name>     → new feature
-fix/<short-name>      → bug fix
-chore/<short-name>    → tooling, config, no production code change
-refactor/<short-name> → restructure without behavior change
-docs/<short-name>     → documentation only
+main                    always deployable
+feat/<name>             new feature
+fix/<name>              bug fix
+chore/<name>            tooling/config, no prod code change
+refactor/<name>         restructure, no behavior change
+docs/<name>             docs only
 ```
 
-Branch names use kebab-case and stay under ~40 chars. `feat/streak-tracker` not `feat/implement_the_streak_tracker_for_users`.
+kebab-case, under ~40 chars.
 
-## Conventional commits
-
-Every commit follows the conventional commits spec:
+## Commit messages
 
 ```
 <type>(<scope>): <subject>
 
-<body — optional>
+<body — optional, 1-2 lines>
 ```
 
-Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`.
+Types: `feat fix chore docs refactor test perf build ci`.
 
-Subject is imperative, lowercase, no trailing period, under ~70 chars.
+- Subject: imperative, lowercase, no trailing period, under ~70 chars.
+- Body only when the subject can't carry the *why*. If it wants to grow past 2 lines, split the commit instead of writing more.
+- Never add a co-author line — the message belongs to the operator, ready to paste as-is into `git commit -m`.
+- Always present the final message in its own fenced code block so it can be copied straight into the terminal.
 
-For atomic commits, **the body is usually unnecessary** — a clear subject says everything the diff doesn't. Only add a body when there's a *why* the subject can't carry: a non-obvious motivation, a hidden constraint, a referenced incident. When you do, keep it to **1–2 short lines**. If the body wants to grow into paragraphs, the change wants to split into multiple commits — not a longer message.
+## Atomic commits, atomic staging
 
-**Examples:**
+One story per commit, one story per `git add`. If the subject needs "and," or the diff bundles two unrelated changes, split the staging along with the message.
 
-- `feat(prayer): add 21-day streak counter to home screen`
-- `fix(theme): correct contrast ratio on Vespers dark mode`
-- `chore(deps): bump flutter_riverpod to 2.5.1`
-- `refactor(home): extract prayer card into shared widget`
+Two files may share a commit only when mechanically coupled (one is invalid without the other). "Both touch the same feature" is not enough.
 
-## The solo-PR discipline
+## Staging vs. committing
 
-Open a PR even when working alone. The five minutes it takes to title and describe a PR are the cheapest design review in software — half the issues that get caught in the diff would have shipped to production without the pause.
+Claude may run `git add` — staging is reversible (`git restore --staged <path>` undoes it). Claude never runs `git commit`, under any circumstances; the operator makes the final call.
 
-- Every feature branch ends in a PR, even one-commit ones.
-- PR title mirrors the conventional-commit subject.
-- PR description has three short sections: **What** (1–2 sentences), **Why** (the user-facing motivation), **How tested** (manual steps or test coverage).
-- Squash-merge to `main`. Intermediate commits on a feature branch don't earn their place in history.
-- After merge, delete the remote branch. Stale branches are noise.
+Claude stages proactively only when:
+- the operator says "stage X" → stage exactly X, or
+- the operator prompts the bare word `git` → see below.
 
-## Atomic commits
+### The `git` shortcut
 
-A commit either makes sense alone or it doesn't belong on its own. If a single commit message would need an "and" in the middle ("add streak counter and fix nav bug"), split it.
+1. `git status` + `git diff` (staged and unstaged).
+2. Detect stories — a story is one coherent, one-subject-line change. Unrelated files, or one file mixing unrelated hunks, means multiple stories.
+3. **Single story:** stage everything, propose the commit message, stop.
+4. **Multiple stories:** announce the split (1..N), stage only story 1 — whole files via `git add <path>`, partial files via a hunk-only patch and `git apply --cached` — propose story 1's message, stop. The next `git` prompt handles story 2.
 
-**Atomicity applies to both the file set AND the message.** If you can't describe the change in one subject line plus at most 1–2 short body lines, the commit is doing too much. The fix is to split the diff, not to write a longer message.
+## PR discipline
 
-Indicators a commit is too big:
+Every feature branch gets a PR, even solo one-commit ones. Title mirrors the commit subject; description covers What / Why / How tested. Squash-merge to `main`; delete the branch after.
 
-- The subject would need to be longer than 70 chars to be accurate.
-- The body wants to become paragraphs to cover everything in the diff.
-- The diff tells two stories — a reviewer would naturally describe it with "this commit does X *and also* Y."
-- You'd review it in two passes.
+## Reviewing a diff
 
-Two files can ship in the same commit if they're **mechanically coupled** (one requires the other to be valid — e.g., removing a `.gitignore` line that hides a file you're adding in the same change). Conceptual relatedness ("both are docs", "both touch the new feature area") is not enough.
+Check, in order: scope (one conventional-commit type?) → accidental debug/commented-out code → test coverage for changed logic → naming consistency → would the subject read clearly to a stranger in six months?
 
-## Reviewing a diff before commit
+## Don't delete now-empty config files
 
-When asked to review a staged or unstaged diff, check in this order:
-
-1. **Scope** — does this match one conventional-commit type? If not, suggest a split.
-2. **Accidents** — debugger statements, commented-out code, `print()` calls, test-only changes left in. Flag every one.
-3. **Tests** — does the change touch logic that has or should have tests? Suggest the minimum coverage that would catch a regression.
-4. **Naming** — variable, function, and file names match the rest of the project? Inconsistency now becomes friction later.
-5. **Message** — would the subject line make sense to a stranger six months from now? Rewrite if not.
-
-## Staging is fine; committing is the operator's job
-
-Claude may stage files with any `git add` form — staging is reversible (`git restore --staged <path>` undoes it). Prefer explicit `git add <path>` over `-A` or `.` for visibility; it's a preference, not a ban.
-
-Claude does NOT run `git commit`. Ever. The operator reviews the staged set and runs the commit themselves — that's the final-eyes checkpoint.
-
-Two situations where Claude proactively stages without being asked:
-
-- The user says "stage X" → stage exactly X.
-- The user prompts just **`git`** (the bare word) — see The `git` shortcut below.
-
-Otherwise, Claude leaves edits in the working tree for the operator to stage.
-
-### The `git` shortcut — execution
-
-When the operator prompts just `git`:
-
-1. Run `git status` and `git diff` (staged + unstaged).
-2. **Detect stories.** A story is a coherent change describable in one subject line. The working tree is multi-story if either:
-   - Two or more files would each need their own subject and they aren't mechanically coupled, OR
-   - One file's diff bundles hunks a reviewer would describe as "X *and also* Y."
-3. **Single-story path:** stage every changed file. Propose a one-line subject (body only when a *why* exists that the subject can't carry; 1–2 lines max). STOP — the operator commits.
-4. **Multi-story path:** name each story Claude sees (1..N). Announce the split clearly. Stage only story 1:
-   - Whole-file stories: `git add <path>`.
-   - Sub-file stories: write a patch with only story 1's hunks and `git apply --cached <patch>`.
-
-   Propose story 1's message. STOP. Each subsequent `git` invocation handles the next story.
-5. **No questions.** If Claude's split is wrong, the operator corrects it after seeing the announcement.
-
-Never run `git commit` — the operator does.
-
-## Don't delete config files that have outlived their content
-
-If a `.gitignore`, `.editorconfig`, `.gitattributes`, or similar config file becomes empty after a change, **edit it to empty — do not delete it**. The file's presence is a signal that the project has chosen to manage that concern; future entries will accumulate there. Deleting and re-creating costs more than leaving an empty file.
-
-## When something feels wrong
-
-If a workflow rule feels expensive in a specific moment, it usually means the situation is unusual (a hotfix, a one-off script, a personal experiment), not that the rule is wrong. The rules earn their keep over months, not minutes. Override deliberately, not silently — leave a note in the commit body when you do.
+If a `.gitignore`, `.editorconfig`, or `.gitattributes` becomes empty after a change, edit it to empty rather than deleting it — its presence signals the project manages that concern.
