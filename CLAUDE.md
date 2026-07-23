@@ -91,7 +91,7 @@ Projects live under `~/Projects/<name>/`, each its own git repo. The dotfiles re
 │   ├── COMPANY.md
 │   └── skills/      ← symlinked to ~/.claude/skills
 └── pray-app/        ← active project
-    └── CLAUDE.md    ← symlink to ../dotfiles/CLAUDE.md
+    └── CLAUDE.md    ← imports ../dotfiles/CLAUDE.md via `@` syntax, then adds project rules
 ```
 
 Project-specific rules go in `<project>/CLAUDE.md`, not in this global file.
