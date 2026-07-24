@@ -24,6 +24,18 @@ Five smells to catch during implementation or review — not a checklist to prov
 - **Interface Segregation** — small, focused interfaces over one fat one. *Smell:* an implementer stubs out methods it never uses. *Fix:* split the interface along actual usage.
 - **Dependency Inversion** — depend on abstractions; inject dependencies instead of reaching for a global/singleton or constructing a concrete dependency inline. *Smell:* a class can't be unit-tested without a real database/network/widget tree. *Fix:* pass the dependency in and let the caller wire the concrete type.
 
+## Design seams
+
+A seam is an abstraction placed on purpose so the concrete side can be swapped without touching callers — the proactive form of Dependency Inversion. Put one exactly where reality changes under you:
+
+- **Externals the tests can't run** — the clock, randomness, network, notifications, the asset/file bundle. Inject them; ship a `Noop`/fake default so tests and headless builds stay green. *Time and randomness are dependencies, not ambient facts — `DateTime.now()`/`Random()` reached for inline is the DIP smell in disguise.*
+- **A policy that will flip later** — feature availability, entitlements, remote config. Route every check through one interface, resolve it trivially now, swap the impl later.
+- **A rule with more than one caller** — extract it into a single place (a pure helper or the owning service's method) and call it; never reimplement it. Two copies that *drift* — same rule, different behavior — are worse than duplication: they're a latent correctness bug.
+
+When is a seam earned? When you can **name the second implementation** — a fake for tests, a paid tier, a second platform. One real use today plus a *named* future one justifies the interface; "might need it someday" does not — that's speculative structure (`flutter-mvp`), so build the concrete class and extract the seam when the second caller actually appears. Tests count as a named second caller.
+
+Pure business math (weighting, thresholds, date rules) belongs in a **stateless helper**, not inlined in a service that also does I/O — one reason to change, and testable without a database.
+
 ## Testing
 
 - Every new function or feature ships a unit test in the same change — not a follow-up task.
