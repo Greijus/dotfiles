@@ -76,6 +76,7 @@ Language-specific style (Effective Dart, Airbnb JS, etc.) lives in the relevant 
 - Do NOT suppress warnings — fix them
 - Do NOT hardcode configuration values
 - Do NOT leave TODO comments without a linked GitHub issue
+- Run **one command per shell call** wherever practical. Compound chains (`cd X && cmd`, `git add … && git commit …`, other `&&`/`;` sequences) are matched as a single opaque string, so they re-prompt on every variation even when each part is separately allowlisted. `cd` once (the working dir persists between calls), and run each `git add` / `git commit` / `flutter` / `dart` as its own call.
 
 ---
 
