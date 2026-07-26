@@ -11,7 +11,7 @@
 - Learning mobile and web app development as a vibe coder
 - Operator of GenX Labs — see [COMPANY.md](COMPANY.md) for strategy and active priorities
 - Primary machine: Ubuntu MATE, SSD, 8GB RAM
-- Testing device: physical Android phone (no emulator)
+- Testing device: physical Android phone or Android emulator
 
 ---
 
@@ -74,7 +74,6 @@ Language-specific style (Effective Dart, Airbnb JS, etc.) lives in the relevant 
 - Do NOT break existing functionality to implement new functionality
 - Do NOT merge to main without a passing CI build
 - Do NOT suppress warnings — fix them
-- Do NOT use the Android emulator — physical device only
 - Do NOT hardcode configuration values
 - Do NOT leave TODO comments without a linked GitHub issue
 
