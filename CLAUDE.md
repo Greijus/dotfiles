@@ -107,6 +107,7 @@ Project-specific rules go in `<project>/CLAUDE.md`, not in this global file.
 - **Claude Artifact prototype → Flutter** → `artifact-to-flutter` skill (working draft; matures with practice)
 - **SOLID, testing, CI/CD** → `clean-code` skill (auto-triggers on new code, architecture calls, tests, CI setup)
 - **Planning large multi-agent builds** → `execution-planning` skill (serial spine → frozen contracts → model-matched parallel lanes → checkpoints)
+- **Suspending a build for later resume** → `wind-down` skill (graceful agent halt → executive report → self-contained RESUME block in the plan)
 
 ---
 
