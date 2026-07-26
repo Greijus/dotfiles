@@ -31,6 +31,7 @@ The orchestrator assigns each lane a model matched to the work's difficulty:
 
 - **Highest tier (e.g. Opus):** intricate semantics, safety/theology/correctness-critical logic, anything hard to verify or expensive to get wrong. Personally review these prompts.
 - **Mid tier (e.g. Sonnet):** high-volume translation (design→UI) and precisely-spec'd mechanical work where the spec already pins the answer.
+- **Audits & adversarial verification → highest tier, and a *different* agent than wrote the code.** A judge that misses a real defect is the costly failure (it ships), so never audit with the executor tier, and never let a lane audit its own code or the orchestrator audit its own plan. A cheap mid-tier pre-sweep (greps, metrics) can *feed* the auditor, but the verdict is top-tier.
 - The orchestrator **reviews every diff regardless of the lane's model** — a cheaper executor never means unreviewed output.
 - *Rationale:* pay for intelligence where it changes the outcome; don't pay for it where the spec removes the ambiguity.
 
@@ -43,6 +44,15 @@ The orchestrator assigns each lane a model matched to the work's difficulty:
 
 - Order lanes by dependency into **waves**; within a lane, do the checkpoint-subset tasks first and **defer the tails**.
 - **Integration checkpoints (ICs)** are explicit barriers — named tasks that must be green before anyone proceeds past them. This is where contract mismatches surface and get fixed, on a real end-to-end slice, not in isolation.
+
+## Audit gates
+
+Integration checkpoints prove the slice *works*; audit gates prove it's *sound*. Run both at each checkpoint (or on a fixed cadence), each by a **fresh, independent agent** — never the lane that wrote the code, never the orchestrator on its own plan:
+
+- **Architecture/code audit** — the merged diff since the last gate against the `clean-code` rubric (SOLID, design seams, tests, comments). Output findings with `file:line` + severity. **Verify before fixing:** confirm each finding, turn it into a remediation task, and **re-audit after it lands** — swapping a foundational impl (fakes→real, in-memory→persistent) amplifies any latent consumer bug, so the safe order is fix-consumers-*then*-swap.
+- **Plan audit** — the plan itself: is every task still executable from Files·Spec·Acceptance by a fresh agent? Any sequencing/integration-order hazard? Contracts still complete? Trackers honest (no optimistic ticks, no merged-but-unticked drift)?
+
+Findings feed back as tasks, not just notes — an unactioned audit is theatre.
 
 ## One integrator merges
 
