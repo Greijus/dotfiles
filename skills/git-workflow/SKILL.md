@@ -60,6 +60,15 @@ Claude stages proactively only when:
 3. **Single story:** stage everything, propose the commit message, stop.
 4. **Multiple stories:** announce the split (1..N), stage only story 1 — whole files via `git add <path>`, partial files via a hunk-only patch and `git apply --cached` — propose story 1's message, stop. The next `git` prompt handles story 2.
 
+## Permission-friendly invocation (when an agent runs git directly)
+
+Where an agent is authorized to commit (e.g. an `execution-planning` build), invoke git so every call matches the permission allowlist — otherwise already-allowed commands still trigger approval prompts:
+
+- **One git command per shell call — never chain with `&&`.** A compound like `git add … && git commit …` is matched as one opaque string, so it re-prompts even though each part is allowlisted on its own.
+- **Multi-line commit bodies go through a file — `git commit -F <msgfile>`, never an inline `-m "line1⏎⏎line2"`.** An embedded newline reads as a command separator to the matcher, so an inline multi-line `-m` prompts every time; `-F <file>` is a single-line command that matches `git commit:*` cleanly while preserving the full conventional-commit body. (Write the message file with the Write tool, not a bash heredoc.)
+
+The operator-runs-commit default above still holds for normal solo work; this applies only where commits are agent-authorized.
+
 ## PR discipline
 
 Every feature branch gets a PR, even solo one-commit ones. Title mirrors the commit subject; description covers What / Why / How tested. Squash-merge to `main`; delete the branch after.
