@@ -32,15 +32,19 @@ Changelog:
 
 No type prefix, no co-author line. Commit it via a message file (`git commit -F <msgfile>`, per git-workflow's permission-friendly rules) when agent commits are authorized; otherwise draft it for the operator.
 
-## When to make one
+## When to make one — ONLY when the operator asks
 
-1. **Before starting fixes on a tested build's findings** — stamp the code state that was actually tested (if it wasn't stamped when handed over). Its changelog describes what that beta contains.
-2. **When handing the next beta to testing** — bump `VERSION` (e.g. `1.0b1` → `1.0b2`) and marker-commit; the changelog lists the fixes/changes since the previous marker.
+**A marker commit is never created on the agent's own initiative.** Not when a fix round finishes, not when the suite goes green, not when a build "looks ready to hand over" — the operator decides when a build becomes a numbered beta, because only they know what they are about to test. Creating one unasked mislabels history with a version that may never reach a device.
 
-Between markers, all work stays ordinary conventional commits. Finding-fix rounds get a fix plan with a tracker (see `execution-planning`); the tracker is ticked per fix, and the next marker's changelog is read straight off it.
+So: finish the work, report that the build is ready, and **state the marker is not made** — draft the `Version X.YbN` message and the changelog if useful, and stop there. Wait for an explicit request ("cut 1.0b2", "mark this version", "make the version commit").
+
+Typical operator-requested moments: stamping the code state a device test actually exercised, or cutting the next beta before handing it over.
+
+Between markers, all work stays ordinary conventional commits — those need no special permission beyond the project's normal commit policy. Finding-fix rounds get a fix plan with a tracker (see `execution-planning`); the tracker is ticked per fix, and the next marker's changelog is read straight off it when the operator calls for it.
 
 ## Rules
 
+- **Operator-requested only** (above) — the one rule that overrides convenience.
 - One marker per tested build — never reuse or amend a version number that reached a device.
 - The marker commit contains **only** the VERSION bump; fixes never ride in it.
 - Don't tag releases with this; store/app-release versioning (pubspec `version:`, build numbers) is a separate concern the marker commit does not touch.
