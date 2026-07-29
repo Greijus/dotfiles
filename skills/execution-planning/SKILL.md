@@ -56,8 +56,10 @@ Findings feed back as tasks, not just notes — an unactioned audit is theatre.
 
 ## One integrator merges
 
-- **Only the orchestrator merges** — serially, running lint + test before each merge, resolving conflicts, **squashing each lane to one clean commit**. (Squash by default; a raw merge commit per lane muddies history.)
-- Lane agents commit freely on their own `feat/lane-*` branch inside an isolated worktree; they never merge into each other or into main.
+- **Only the orchestrator merges** — serially, resolving conflicts, and gating on the **merged tree** (`git merge --no-ff --no-commit` → lint + full tests → `git commit`, or `git merge --abort`). Green-in-isolation can be red-combined; that is the failure the gate exists to catch.
+- **True merges (`--no-ff`), never squash** — squashing orphans a lane's atomic commits, so deleting the branch afterwards destroys that history. A real merge makes them ancestors of `main`, which is what makes branch cleanup safe. See `git-workflow` § Merge discipline for the full rule.
+- Lane agents commit freely on their own `feat/lane-*` branch inside an isolated worktree; they never merge into each other or into main. **They run their gate in the foreground** — a backgrounded suite is how a lane ends a session with nothing committed and failures nobody has read.
+- **When the batch ships as one verified artifact** (a beta cut handed to device testing), the alternative is a `rc/<version>` branch that lanes land on by *rebase + fast-forward*, keeping main frozen and the history linear — `git-workflow` § Release-candidate branches. It gates twice per lane instead of once, and rewrites shas, so **tick the tracker after the fast-forward, never off the lane branch**.
 
 ## Fresh context per agent — the brief is load-bearing
 
