@@ -1,6 +1,6 @@
 ---
 name: beta-versioning
-description: GenX Labs beta versioning — a VERSION file at the repo root plus "Version X.YbN" marker commits that stamp exactly which build a device-test round exercised. Use whenever a build is handed to (or returns from) device/beta testing, when the operator reports tested-build findings and fixes are about to start, when cutting the next beta, or on any mention of "version file", "1.0b2", "beta version", "mark this version", or a "Version …" changelog commit. Complements git-workflow (marker commits are the one sanctioned exception to conventional-commit format).
+description: GenX Labs beta versioning — a VERSION file at the repo root plus "Version X.YbN" marker commits that stamp exactly which build a device-test round exercised. Use whenever a build is handed to (or returns from) device/beta testing, when the operator reports tested-build findings and fixes are about to start, when cutting the next beta, or on any mention of "version file", "1.0b2", "beta version", "mark this version", or a "Version …" changelog commit. Also covers wiring the build to read VERSION — reach for it on `versionName`/`versionCode`, pubspec `version:`, or "which build is on the device". Complements git-workflow (marker commits are the one sanctioned exception to conventional-commit format).
 ---
 
 # beta-versioning
@@ -47,4 +47,25 @@ Between markers, all work stays ordinary conventional commits — those need no 
 - **Operator-requested only** (above) — the one rule that overrides convenience.
 - One marker per tested build — never reuse or amend a version number that reached a device.
 - The marker commit contains **only** the VERSION bump; fixes never ride in it.
-- Don't tag releases with this; store/app-release versioning (pubspec `version:`, build numbers) is a separate concern the marker commit does not touch.
+- **Wire the build to read VERSION** (below) so the string a marker stamps is the one a device reports. Until a project does, its app version is a separate concern the marker commit doesn't touch — but that leaves builds unidentifiable on-device, which defeats the point of stamping them.
+
+## Wiring VERSION into the build
+
+A marker commit only pays off if you can tell which build a device is running. Have the build
+**read VERSION directly** rather than copying the number into a manifest or `pubspec.yaml`:
+duplication drifts, and a second place to bump is a second place to forget.
+
+Flutter/Android reference — pray-app, `mobile/android/app/build.gradle.kts` — parses the first
+line, derives both Android fields, and fails the build loudly on anything malformed:
+
+```
+1.0b4  ->  versionName "1.0b4",  versionCode 10004
+1.0    ->  versionName "1.0",    versionCode 10099
+```
+
+`versionCode` is `major*10000 + minor*100 + (beta, or 99 for a final release)`, so it only ever
+increases and a release outranks every beta of its minor. Betas cap at 98.
+
+Once wired, `pubspec.yaml`'s `version:` is inert — say so in a comment beside it and never bump
+it. The marker commit still contains **only** the VERSION bump; that it now moves the app's
+reported version is the whole point, not a violation of the rule above.
