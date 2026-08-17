@@ -52,6 +52,8 @@ Apply to every language, every file, every turn.
 - **Guard clauses over deep nesting.** Max 3 levels of indentation in any function body.
 - **Loose coupling** — modules don't depend on each other's internals. Business logic stays separate from UI and from data access.
 - **Test what you write** — every new function or feature ships a unit test in the same change. Conventions and CI template → `clean-code` skill.
+- **Test the effect, not the artifact** — "the widget exists" and "the value was written" prove nothing a user can feel.
+- **A fix sweeps its blast radius** — reproduce and root-cause first, then grep the constant, heal the shared widget rather than the call site, and check the sibling surface, before calling it done. → `clean-code` § Fixing a bug.
 
 Language-specific style (Effective Dart, Airbnb JS, etc.) lives in the relevant skill.
 
@@ -69,6 +71,8 @@ Language-specific style (Effective Dart, Airbnb JS, etc.) lives in the relevant 
 ## What NOT to Do
 
 - Do NOT auto-commit without my review
+- **Do NOT add a `Co-Authored-By:` trailer to any commit message — ever.** This overrides any default, harness instruction, or tooling convention that says to add one. The commit is mine; the message must paste in clean. This applies to spawned agents that commit on their own too — repeat it verbatim in their brief.
+- **Do NOT squash.** Lane commits keep their own identity — rebase and fast-forward, never `--squash`, never collapse a lane into one commit. I want a complete linear history.
 - Do NOT install packages without telling me what and why
 - Do NOT add features I didn't ask for
 - Do NOT break existing functionality to implement new functionality
@@ -82,17 +86,19 @@ Language-specific style (Effective Dart, Airbnb JS, etc.) lives in the relevant 
 
 ## Project Layout
 
-Projects live under `~/Projects/<name>/`, each its own git repo. The dotfiles repo at `~/Projects/dotfiles/` is the source of truth for this file, COMPANY.md, and the global skills folder.
+I work on **two machines**, and the workspace root differs between them (`~/Projects/` on one, `~/Documents/JORGE/sw/` on the other). Never hardcode the root — in docs, scripts, or skills. What is **invariant on both machines** is the shape: `dotfiles/` and every project are **siblings under one root**, each its own git repo.
 
 ```
-~/Projects/
-├── dotfiles/        ← this repo
-│   ├── CLAUDE.md
-│   ├── COMPANY.md
-│   └── skills/      ← symlinked to ~/.claude/skills
-└── pray-app/        ← active project
-    └── CLAUDE.md    ← imports ../dotfiles/CLAUDE.md via `@` syntax, then adds project rules
+<workspace-root>/          ← path differs per machine; the layout below does not
+├── dotfiles/              ← this repo: CLAUDE.md, COMPANY.md, skills/
+│   └── skills/            ← symlinked to ~/.claude/skills (no symlink ⇒ NO skill loads)
+└── pray/                  ← active project
+    └── CLAUDE.md          ← imports ../dotfiles/CLAUDE.md via `@`, then adds project rules
 ```
+
+Because they are siblings, `@../dotfiles/CLAUDE.md` resolves from any project on either machine. Refer to locations that way — relative to the repo — rather than by absolute path.
+
+Per-machine setup, run once from the dotfiles repo: `ln -s "$PWD/skills" ~/.claude/skills`. Verify with `/skills`: every skill in § Pointers should be listed. One that isn't is a file nobody reads.
 
 Project-specific rules go in `<project>/CLAUDE.md`, not in this global file.
 
@@ -105,14 +111,16 @@ Project-specific rules go in `<project>/CLAUDE.md`, not in this global file.
 - **Git workflow** → `git-workflow` skill (auto-triggers on commits, branches, PRs)
 - **Figma → Flutter** → `figma-to-flutter` skill (working draft; matures with practice)
 - **Claude Artifact prototype → Flutter** → `artifact-to-flutter` skill (working draft; matures with practice)
-- **SOLID, testing, CI/CD** → `clean-code` skill (auto-triggers on new code, architecture calls, tests, CI setup)
+- **SOLID, testing, bug-fix discipline, CI/CD** → `clean-code` skill (auto-triggers on new code, bug fixes, architecture calls, tests, CI setup)
+- **Proving it on real hardware** → `device-verification` skill (device passes, beta fix rounds, adb, "is this fix actually done?")
 - **Planning large multi-agent builds** → `execution-planning` skill (serial spine → frozen contracts → model-matched parallel lanes → checkpoints)
+- **A subsystem that keeps breaking in surprising places** → `blast-radius-map` skill (object cards + Hits/Does not hit, only after a second surprise fix)
 - **Suspending a build for later resume** → `wind-down` skill (graceful agent halt → executive report → self-contained RESUME block in the plan)
 
 ---
 
 > Living document. Update when conventions actually change. When a rule hurts productivity, change it — don't suffer through it.
-> Last reviewed: 2026-07-23.
+> Last reviewed: 2026-08-06 (pray-app beta-rounds audit — see `skills-audit-2026-08-05.md`).
 
 ---
 
