@@ -69,3 +69,8 @@ increases and a release outranks every beta of its minor. Betas cap at 98.
 Once wired, `pubspec.yaml`'s `version:` is inert — say so in a comment beside it and never bump
 it. The marker commit still contains **only** the VERSION bump; that it now moves the app's
 reported version is the whole point, not a violation of the rule above.
+
+**Show the version inside the app** — a Settings or About footer reading the build's own
+`versionName`. The chain only closes when the operator can read `1.0b5` on the device screen and
+map it to a marker commit without a terminal. *Until this shipped, the app said "version 1.0
+beta" and device findings could not be pinned to a build: "I don't know what beta is installed."*
