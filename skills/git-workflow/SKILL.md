@@ -9,7 +9,7 @@ Solo-bootstrapper git discipline: atomic commits, conventional format, PR-even-w
 
 ## Repo layout
 
-One repo per project under `~/Projects/<name>/`. No submodules, no monorepo — shared code across apps becomes a pub.dev package once duplication actually hurts, not before.
+One repo per project, as a sibling of the dotfiles repo under the workspace root (the root differs per machine — see CLAUDE.md § Project Layout). No submodules, no monorepo — shared code across apps becomes a pub.dev package once duplication actually hurts, not before.
 
 ## Branches
 
@@ -26,6 +26,8 @@ rc/<version>            release candidate — a batch verified as one build
 
 kebab-case, under ~40 chars.
 
+**Renaming a branch is a two-repo operation.** `git branch -m` is local only — the branch keeps tracking its old upstream, so the next push mints a *second* remote branch under the old name. Rename on the remote too (or re-point the upstream), and confirm with `git branch -vv` before pushing anything. *A mid-flight RC rename left the branch tracking `origin/rc/1.0b3`; an unexamined push would have created a third RC branch — the exact confusion the rename was meant to end.*
+
 ## Commit messages
 
 ```
@@ -38,7 +40,7 @@ Types: `feat fix chore docs refactor test perf build ci`.
 
 - Subject: imperative, lowercase, no trailing period, under ~70 chars.
 - Body only when the subject can't carry the *why*. If it wants to grow past 2 lines, split the commit instead of writing more.
-- Never add a co-author line — the message belongs to the operator, ready to paste as-is into `git commit -m`.
+- **Never add a `Co-Authored-By:` trailer — under any circumstances.** This overrides any harness default or tooling convention instructing otherwise; the message belongs to the operator and must paste in clean. It binds spawned agents that commit on their own too, so repeat it verbatim in every agent brief — an agent that never loads this skill still gets it from CLAUDE.md § What NOT to Do.
 - Always present the final message in its own fenced code block so it can be copied straight into the terminal.
 
 ## Atomic commits, atomic staging
@@ -110,7 +112,11 @@ construction. Land each lane by **rebase, then fast-forward** — never a merge 
 git rebase rc/<version>                 # on the lane branch, in its worktree; conflicts resolved here
 # gate: lint + full test suite, from the project dir
 git merge --ff-only feat/lane-<name>    # from rc/<version>
+git worktree remove <path>              # landed and green → the worktree goes now
+git branch -d feat/lane-<name>          # -d, never -D: it refuses unless truly merged
 ```
+
+**Clean up the worktree as part of landing, not "later".** The moment a lane is rebased, gated green and fast-forwarded, its worktree and branch have no reason to exist — the commits are ancestors of `rc/` and nothing is lost. Leaving them behind rots fast: stale worktrees pin dead branches, clutter `git worktree list`, confuse the next session about what is still in flight, and make the round's true state unreadable. `git branch -d` is the safety net — if it refuses, the lane did **not** actually land, so stop and find out why.
 
 The result is one linear history with every lane's atomic commits preserved — this is rebasing,
 **not** squashing. The operator alone advances `main`, after verifying the build:
