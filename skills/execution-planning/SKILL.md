@@ -59,6 +59,8 @@ Findings feed back as tasks, not just notes — an unactioned audit is theatre.
 - **Only the orchestrator merges** — serially, resolving conflicts, and gating on the **merged tree** (`git merge --no-ff --no-commit` → lint + full tests → `git commit`, or `git merge --abort`). Green-in-isolation can be red-combined; that is the failure the gate exists to catch.
 - **True merges (`--no-ff`), never squash** — squashing orphans a lane's atomic commits, so deleting the branch afterwards destroys that history. A real merge makes them ancestors of `main`, which is what makes branch cleanup safe. See `git-workflow` § Merge discipline for the full rule.
 - Lane agents commit freely on their own `feat/lane-*` branch inside an isolated worktree; they never merge into each other or into main. **They run their gate in the foreground** — a backgrounded suite is how a lane ends a session with nothing committed and failures nobody has read.
+- **Landing a lane includes removing its worktree and branch** (`git worktree remove` + `git branch -d`). A worktree that outlives its landing makes the round's true state unreadable — the next session cannot tell in-flight from finished. See `git-workflow` § Release-candidate branches.
+- **No `Co-Authored-By:` trailer, and no squashing** — repeat both verbatim in every agent brief. A spawned agent follows its harness defaults unless the brief overrides them, and these are the two that silently violate the operator's history.
 - **When the batch ships as one verified artifact** (a beta cut handed to device testing), the alternative is a `rc/<version>` branch that lanes land on by *rebase + fast-forward*, keeping main frozen and the history linear — `git-workflow` § Release-candidate branches. It gates twice per lane instead of once, and rewrites shas, so **tick the tracker after the fast-forward, never off the lane branch**.
 
 ## Fresh context per agent — the brief is load-bearing
@@ -66,15 +68,43 @@ Findings feed back as tasks, not just notes — an unactioned audit is theatre.
 - Each spawned agent starts with an **empty context**. It knows only what the spawn prompt + cited spec + frozen contract tell it. Write the brief **self-contained**; frozen contracts are what keep it short.
 - The orchestrator's context accumulates lane **summaries and diffs**, not their transcripts — so it can supervise many lanes without filling up.
 
+### Audit the brief against the live repo before spawning
+
+A spawn prompt is executed literally by an agent with no way to notice it is wrong. Auditing one round's handoff found **five** instructions that would each have cost a lane: a branch rename that was local-only, a lane seam that was not actually disjoint, a search task whose answer already existed, a grep that would have "fixed" deliberate prose, and a stale test-count baseline that would have made every lane's gate result meaningless. Before spawning, verify against the repo as it is *right now*:
+
+- **Run the baseline yourself.** A baseline that is already red turns every lane's "green" into a guess.
+- **Prove file-disjointness with `git grep`**, not by feature name — "you own Settings" is exactly the shorthand that produces a collision.
+- **Delete tasks whose answer you already have**, and flag the known traps in the ones you keep.
+- **Check the git state the prompt asserts** — branch, upstream, tip sha.
+
 ## The plan is durable memory
 
 - Track progress with **checkboxes in a committed plan file**. It survives context compaction and session loss — the durable spine of a multi-session build.
 - Watch for **tracker drift:** unmerged lane work isn't reflected in the boxes, so "not ticked" ≠ "not started" — check the worktrees/branches for true status. The orchestrator owns ticking, which also keeps the plan file off the merge-hotspot list.
+- **Record only what git cannot derive.** A status table restating which version `main` is at, or where a round's work lives, is a second source of truth that drifts and then needs its own reconciliation commits. On pray-app plan bookkeeping ran at ~1.9 docs commits per fix commit; batching ticks per *landing* rather than per fix keeps the drift safety and halves the noise.
+- **A written procedure is code — run it before you record it.** Anything a later reader will execute (a forcing recipe, a repro, a setup script) is verified by executing it, not by writing it carefully.
+- **Durable claims carry a date, and get re-checked before they block anything.** *A feature was written off as impossible on platform research that a single OS release had already made obsolete; the "impossible" was repeated as fact for two rounds.*
 
 ## Task anatomy
 
 Every task carries three fields: **Files** (what it touches) · **Spec** (source of truth, cited) · **Acceptance** (the testable done-condition). Check the box only when acceptance holds and tests pass. A task a fresh-context agent can't execute from these three alone is under-specified — fix the task, not the agent.
 
+**Files is what the lane edits. Say separately what it must read but not edit, and what to skip:**
+
+```
+Reference (load): docs/product/<spec>.md § <section>
+Do NOT load: <sibling rounds>, <unrelated docs>
+```
+
+A fresh-context agent otherwise either re-derives the spec location from prose scattered across the round file, or slurps sibling rounds/docs it doesn't need. Two lines, not a new section.
+
+Two ways a Spec is not actually frozen, both of which cost a lane:
+
+- **It contains an undecided product call, or two sections that contradict each other.** Never spawn a lane on one — ask the operator and settle it first. Guessing wastes the lane whichever way you guess. *One round lost a full rebuild to a spec whose § Behaviour and § Settings disagreed; the wrong reading was built first.*
+- **It only describes the blank-slate user.** Anything with counters, streaks, history or migrations states its behavior for the user who *already has data* — mid-run adoption, past-the-target, dead or expired state. Otherwise real history keeps arriving as a brand-new product question: one mechanic was re-specced in three consecutive rounds for exactly this reason.
+
+Acceptance criteria can be wrong too — when a device check disagrees with the accept line, suspect both.
+
 ## Not covered here
 
-SOLID/testing/CI → `clean-code`. Flutter layout → `flutter-mvp`. Commits/branches/PRs → `git-workflow`. Deterministic multi-agent *scripts* (programmatic fan-out/verify pipelines) → the Workflow tool, a different mechanism from this human-readable planning discipline.
+SOLID/testing/CI → `clean-code`. Flutter layout → `flutter-mvp`. Commits/branches/PRs → `git-workflow`. Deterministic multi-agent *scripts* (programmatic fan-out/verify pipelines) → the Workflow tool, a different mechanism from this human-readable planning discipline. A subsystem whose blast radius keeps surprising lanes across rounds → `blast-radius-map`, which persists the Hits/Does-not-hit list this skill's Reference line only states per-task.
