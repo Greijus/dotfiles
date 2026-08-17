@@ -1,6 +1,6 @@
 ---
 name: clean-code
-description: Use this skill whenever writing a new function, class, or feature, making an architecture or "should I split this" call, or writing/reviewing unit tests and CI setup in any GenX Labs project. Covers SOLID principles with smell→fix guidance, the minimal-comment rule, the test-per-function discipline, and the GitHub Actions CI template that gates merges. Trigger for any new code being written, architecture review, test writing, or CI pipeline changes.
+description: Use this skill whenever writing a new function, class, or feature, FIXING A BUG, making an architecture or "should I split this" call, or writing/reviewing unit tests and CI setup in any GenX Labs project. Covers SOLID principles with smell→fix guidance, the minimal-comment rule, the blast-radius discipline for bug fixes, the test-the-effect rule, and the GitHub Actions CI template that gates merges. Trigger for any new code being written, any bug fix or defect investigation ("fix this", "it's broken", "this doesn't work", a device-test finding, a fix round), architecture review, test writing, or CI pipeline changes.
 ---
 
 # clean-code
@@ -13,6 +13,8 @@ Self-explanatory names and small functions eliminate most comments. When one is 
 - Explain WHY (a constraint, a workaround, a non-obvious tradeoff) — never WHAT.
 - Max 1–2 lines. If it needs more, the code is the problem — refactor instead of documenting around it.
 - No commented-out code, no restating the function name in prose.
+
+**A comment that states behavior is a contract** — back it with code and a test, or delete it. When a fix changes behavior, the comment describing the old behavior is part of that diff. And a comment that contradicts its code is a bug report: read the two against each other when diagnosing. *A lifecycle comment promised "…or a new day begun" that nothing implemented, and a highlight commented "the blurred white disc" was painted 30% black — both were the diagnosis, sitting in plain sight.*
 
 ## SOLID
 
@@ -36,6 +38,8 @@ When is a seam earned? When you can **name the second implementation** — a fak
 
 Pure business math (weighting, thresholds, date rules) belongs in a **stateless helper**, not inlined in a service that also does I/O — one reason to change, and testable without a database.
 
+**A fake is dumb state, not a second implementation.** A fake exists so a test can run without the real dependency — it must never re-derive the rules. *Smell:* a behavioral change touches both `<thing>_impl` and `fake_<thing>`, and a `fake_<thing>_test` mirrors the real suite. *Fix:* extract the rule into a pure core both call, or back the fake with the same derivation over an in-memory store. On pray-app a 261-line fake re-implemented the challenge rules on its own state model, so a single rule change had to be written twice and pinned twice — a tax charged on every future change, and two answers free to drift apart.
+
 ## Testing
 
 - Every new function or feature ships a unit test in the same change — not a follow-up task.
@@ -43,6 +47,33 @@ Pure business math (weighting, thresholds, date rules) belongs in a **stateless 
 - Cover the edge cases and error paths that would actually break in production, not a coverage percentage.
 - Dart: `test/` mirrors `lib/` — `lib/features/prayer/prayer_controller.dart` → `test/features/prayer/prayer_controller_test.dart`.
 - Can't unit-test a function without a real device/network/database? That's the Dependency Inversion smell above — fix the design, don't skip the test.
+
+### Assert the effect, not the artifact
+
+Every bug that reached a device on pray-app and *should* have been caught by an existing test was missed for one of these reasons. A test that asserts the artifact — a widget exists, a value was written, the happy path returned — proves nothing a user can feel.
+
+- **Pin the user-visible outcome:** pixels actually painted, the read path's behavior changing, the forbidden call count staying at zero. *A celebration animation shipped invisible — it rendered beneath a dialog's barrier scrim — with green tests that only asserted the widget was in the tree.*
+- **Every flag you write gets a test on its read path.** A written-never-read field is dead code with a switch attached: the setting "works" and changes nothing. *Two settings shipped purely decorative this way.*
+- **Every `await` that gates startup or navigation gets a failure-path test** — error, timeout, and the fallback route. A screen whose only exit is a happy-path `await` is a hang waiting to happen.
+- **Test past the boundary, not just up to it** — day N+1 of an N-day target, the second event on the same day, the re-fire. *Two latent bugs lived past day 21 because no test ever went there.*
+- **Data-driven logic runs over the real shipped corpus**, not a synthetic sample. *Three of 122 real verses carried their own quotation marks; no handwritten fixture did.*
+- **Mutation-verify a guarantee that must never break** (privacy, money, safety): delete the guarantee and prove the test goes red. Otherwise you have a test that passes for the wrong reason.
+
+## Fixing a bug
+
+A careless fix relocates a defect instead of closing it. On pray-app, *every* device-test round found bugs in the previous round's fixes — the single most expensive pattern in the project.
+
+- **Reproduce, then root-cause, then fix.** No fix lands on an unreproduced defect. If it won't reproduce, close it with the evidence and a recipe for catching it next time — not a shrug.
+- **One symptom can hide two questions.** Answer all of them before fixing any. *A P0 report was "why did the splash appear" AND "why did it hang"; only the second was a defect.*
+- **Sweep the blast radius before calling it fixed.** What you found is one instance of its cause:
+  - *Replaced a hardcoded constant?* Grep the feature for every other instance. Live arithmetic only — comments and content strings are not survivors, and one hit is usually a deliberate mention you would be wrong to "fix". *A fix corrected "Day 34 of 21" in the label and missed the same literal in the progress bar twenty lines below; the next round found it.*
+  - *Fixed a shared widget for one screen?* Fix it **in the widget** so every call site heals. A per-call-site patch guarantees the next screen ships the same bug. *One shared glyph took four rounds this way.*
+  - *Fixed one surface?* Check the sibling surface with the same shape before closing — the same dialog shape, the same affordance on another screen.
+- **A subsystem that has cost a surprise fix twice earns a written map** — grepping the blast radius fresh every round is how the second-order hit gets missed a third time. → `blast-radius-map`.
+- **The regression test ships in the same commit**, asserting the effect (above).
+- **Update the comment, doc, or spec that described the old behavior in the same diff.**
+- **One owner per defect.** Two open reports with one suspected cause are one fix — otherwise the same defect gets fixed twice and shipped once.
+- **A fix is done when it survives the device, not when it merges** → `device-verification`.
 
 ## CI/CD
 
@@ -68,4 +99,4 @@ Swap the two `flutter` steps for the stack's equivalent (`npm run lint` / `npm t
 
 ## Not covered here
 
-Dart/Flutter style and widget rules → `flutter-mvp` skill. Commit/branch/PR mechanics → `git-workflow` skill.
+Dart/Flutter style and widget rules → `flutter-mvp` skill. Commit/branch/PR mechanics → `git-workflow` skill. Proving a fix on real hardware, and running a device-test fix round → `device-verification` skill.
