@@ -66,6 +66,22 @@ line, derives both Android fields, and fails the build loudly on anything malfor
 `versionCode` is `major*10000 + minor*100 + (beta, or 99 for a final release)`, so it only ever
 increases and a release outranks every beta of its minor. Betas cap at 98.
 
+**Stamp the build, not just the beta.** VERSION doesn't move between markers, so every sideloaded
+build carrying newer fixes reports the same string as the marker it started at — indistinguishable
+on-device (learned on pray-app, 2026-08-10). Fix this by having `versionName` self-identify in
+three states: **VERSION names the beta; the short commit sha names the build.**
+
+```
+Clean build, HEAD == marker commit   → 1.0b5              (it IS the named beta — no stamp)
+Clean build, commits past the marker  → 1.0b5+9af4e20     (drifted — sha appended)
+Uncommitted tracked changes           → 1.0b5+9af4e20.dirty
+```
+
+A build is "at the marker" when the tree is clean **and** `HEAD` equals the sha of the last commit
+that touched VERSION; only then does it report the bare version. `.dirty` flags a build that
+matches no commit at all. `versionCode` stays derived from VERSION alone — the sha is display-only,
+so store-ordering never breaks. Reference: pray-app `mobile/android/app/build.gradle.kts`.
+
 Once wired, `pubspec.yaml`'s `version:` is inert — say so in a comment beside it and never bump
 it. The marker commit still contains **only** the VERSION bump; that it now moves the app's
 reported version is the whole point, not a violation of the rule above.
