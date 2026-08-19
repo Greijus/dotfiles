@@ -77,6 +77,45 @@ A spawn prompt is executed literally by an agent with no way to notice it is wro
 - **Delete tasks whose answer you already have**, and flag the known traps in the ones you keep.
 - **Check the git state the prompt asserts** — branch, upstream, tip sha.
 
+## Numbering and the phase table — the GenX standard
+
+**Plan items are numbered `<phase>.<item>`, never lettered.** Phase 4's items are 4.1, 4.2, 4.3.
+Letter-prefixed ids (`B5`, `X12`, `W3`) are reserved for **device-test round findings**, where
+they are stamped into commit messages and cannot be renamed — and even there, cite them
+**round-qualified** (`R8-B2`, `R6-X12`) so a reader knows which round owns the letter without
+memorising the alphabet. A plan that invents its own letter series is the thing this rule exists
+to stop: after a few rounds nobody can tell `W3` from `X3` from `B3`, and every cross-reference
+becomes a lookup.
+
+**Every plan opens with a phase table**, before the prose, so the state of the work is legible in
+one screen:
+
+```markdown
+| # | Phase | Items | Status |
+|---|-------|-------|--------|
+| 1 | Fix the wiring | ✅ 1.1 · ⊡ 1.2 · ☐ 1.3 | ongoing |
+| 2 | Safety | ⭐ 2.1 · ✅ 2.2 | implemented |
+```
+
+**Item glyphs** — one per item, so the row shows progress without opening anything:
+
+| Glyph | Means |
+|---|---|
+| ☐ | not started |
+| ⊡ | ongoing |
+| ✅ | implemented (code landed, gate green) |
+| ⭐ | **verified** — proved on real hardware, not just tested |
+
+**Phase status** is one of `not started · ongoing · implemented · verified · closed`. The
+distinction that earns its keep is **implemented ≠ verified ≠ closed**: implemented means the
+gate is green, verified means a device proved it (`device-verification`), closed means nothing is
+outstanding — including the operator's own follow-ups. A phase whose code landed but whose device
+pass has not run is `implemented`, and saying so is the whole point.
+
+The table is a **summary of the tracker, not a second source of truth** — the per-item detail
+stays in one § Tracker section, and both are updated in the same edit. Two places that can
+disagree is one place too many; if the table starts drifting, delete it rather than reconcile it.
+
 ## The plan is durable memory
 
 - Track progress with **checkboxes in a committed plan file**. It survives context compaction and session loss — the durable spine of a multi-session build.
