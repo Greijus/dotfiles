@@ -52,6 +52,7 @@ Before a procedure is written down: execute it, confirm the state it claims to p
 ## Running a fix round
 
 - **One round file per device pass**, with a stable finding-ID scheme. Log the finding when it is reported, tick it when the fix lands.
+- **Cite findings round-qualified — `R8-B2`, not `B2`.** The letter series is stamped into commit messages and can never be renamed, but on its own it forces every reader to remember which round owned which letter. Anything that is *not* a device-test finding — a plan, a product change — uses `<phase>.<item>` numbering instead (`execution-planning` § Numbering and the phase table). Do not start a new letter series for a plan.
 - **Reproduce first.** No lane, no fix, no estimate on an unreproduced defect.
 - **One owner per defect** — two reports with one suspected cause are one fix, or the same defect gets fixed twice and shipped once.
 - **Never open a lane on an undecided point.** An ambiguous spec is a product call, not an implementation detail; guessing wastes the lane either way. *One round lost a full rebuild to a spec whose two sections contradicted each other.*
