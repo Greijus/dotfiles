@@ -87,15 +87,33 @@ memorising the alphabet. A plan that invents its own letter series is the thing 
 to stop: after a few rounds nobody can tell `W3` from `X3` from `B3`, and every cross-reference
 becomes a lookup.
 
-**Every plan opens with a phase table**, before the prose, so the state of the work is legible in
-one screen:
+**Every plan opens with a phase table — the very first thing under the H1, above everything
+else.** Not below a framing blockquote, not below a RESUME block, not below "why this exists".
+The operator opens a plan to see *where the work is*, usually on a phone, and anything above the
+table is something they have to scroll past to get the one answer they came for.
 
 ```markdown
+# Plan: <name>
+
 | # | Phase | Items | Status |
 |---|-------|-------|--------|
 | 1 | Fix the wiring | ✅ 1.1 · ⊡ 1.2 · ☐ 1.3 | ongoing |
 | 2 | Safety | ⭐ 2.1 · ✅ 2.2 | implemented |
+
+☐ not started · ⊡ ongoing · ✅ implemented · ⭐ verified on hardware
+
+<!-- everything else below: RESUME, framing, why, sequencing, tracker detail -->
 ```
+
+**Order below the table is fixed:** the table, then the glyph legend, then a **RESUME** block if
+the plan has been wound down, then the framing/why, then the detail. RESUME sits *underneath* the
+table because it answers "how do I restart" — a question you only ask after you know where the
+work stopped, which is what the table just told you.
+
+**The table is only worth having if it is true at the moment it is read.** An item that is
+half-built is `⊡`, today, in the same edit that lands the half — not `☐` until it is finished.
+Leaving a started item unticked is the most common way a plan lies, because it reads exactly like
+work nobody has begun, and the next session re-plans it from scratch.
 
 **Item glyphs** — one per item, so the row shows progress without opening anything:
 
