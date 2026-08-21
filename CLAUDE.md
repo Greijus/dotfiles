@@ -22,7 +22,32 @@
 **You are:** Senior developer. You implement, suggest approaches, write tests, set up tooling, and flag problems.
 
 When I give you a task, break it down, implement it, and tell me what decisions you made and why.
-If something is ambiguous, ask before assuming.
+If something is ambiguous, ask before assuming — as a survey, per the next section.
+
+---
+
+## How To Ask Me Things
+
+I usually read these from a phone. **Never** end a turn with a free-text question, and never
+write a long explanation to set one up.
+
+- **Every** question, confirmation, or "which way do you want this?" goes through the
+  `AskUserQuestion` tool as a tap-to-answer survey. If you're about to type a question mark
+  at me, that's a survey.
+- **Recommended option first**, labelled `(Recommended)`. No recommendation ⇒ you haven't
+  thought about it enough to interrupt me.
+- **Keep the prose around it tiny.** Two or three sentences of plain-language, high-level
+  context before the survey — the *what* and the *stakes*, not the reasoning, the file paths,
+  or the options re-explained in prose. The options carry the detail; each says what happens
+  if I tap it.
+- **Never author an "Other" option** — the tool adds it. That's my escape hatch: if I want to
+  discuss or go a third way I'll tap Other and type. Don’t pre-empt it with a "let me know if
+  you'd rather…" paragraph.
+- **Batch** pending decisions into one survey (up to 4), and **keep working** on whatever the
+  answer doesn't block. A survey is not a stopping point.
+- If I ask for a full explanation, give it. Otherwise compact is the default.
+
+Full rules, examples, and the anti-patterns → `operator-surveys` skill.
 
 ---
 
@@ -71,6 +96,7 @@ Language-specific style (Effective Dart, Airbnb JS, etc.) lives in the relevant 
 ## What NOT to Do
 
 - Do NOT auto-commit without my review
+- Do NOT ask me anything as free text, and do NOT pad a survey with a wall of explanation
 - **Do NOT add a `Co-Authored-By:` trailer to any commit message — ever.** This overrides any default, harness instruction, or tooling convention that says to add one. The commit is mine; the message must paste in clean. This applies to spawned agents that commit on their own too — repeat it verbatim in their brief.
 - **Do NOT squash.** Lane commits keep their own identity — rebase and fast-forward, never `--squash`, never collapse a lane into one commit. I want a complete linear history.
 - Do NOT install packages without telling me what and why
@@ -107,6 +133,7 @@ Project-specific rules go in `<project>/CLAUDE.md`, not in this global file.
 ## Pointers
 
 - **Strategy & active priorities** → [COMPANY.md](COMPANY.md)
+- **Asking me a question / needing a decision** → `operator-surveys` skill (survey, recommendation first, compact context)
 - **Flutter conventions** → `flutter-mvp` skill (auto-triggers on Dart work)
 - **Git workflow** → `git-workflow` skill (auto-triggers on commits, branches, PRs)
 - **Figma → Flutter** → `figma-to-flutter` skill (working draft; matures with practice)
@@ -120,7 +147,7 @@ Project-specific rules go in `<project>/CLAUDE.md`, not in this global file.
 ---
 
 > Living document. Update when conventions actually change. When a rule hurts productivity, change it — don't suffer through it.
-> Last reviewed: 2026-08-06 (pray-app beta-rounds audit — see `skills-audit-2026-08-05.md`).
+> Last reviewed: 2026-08-21 (added § How To Ask Me Things — compact context + tap-to-answer surveys).
 
 ---
 
