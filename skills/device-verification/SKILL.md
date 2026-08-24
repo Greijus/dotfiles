@@ -1,6 +1,6 @@
 ---
 name: device-verification
-description: Use this skill whenever a build is proved (or disproved) on real hardware — running a device-test pass, triaging what the operator found on the phone or tablet, deciding whether a fix is actually done, planning or running a round of beta fixes, or driving a device over adb. Covers the V-list of things a test suite cannot prove, verifying the mechanism rather than the display, treating device state as evidence, writing forcing procedures that actually work, the round/finding-ID structure for fix cycles, and Android adb tribal knowledge. Trigger on "test on the device", "verify on the tablet/phone", "device pass", "beta round", "fix round", "does it work on the real device", "I found this on my phone", adb/screencap/logcat work, or any claim that a fix is complete.
+description: Use this skill whenever a build is proved (or disproved) on real hardware — running a device-test pass, triaging what the operator found on the phone or tablet, deciding whether a fix is actually done, planning or running a round of beta fixes, or driving a device over adb. Covers the device-only list of things a test suite cannot prove, verifying the mechanism rather than the display, treating device state as evidence, writing forcing procedures that actually work, the round/finding-ID structure for fix cycles, and Android adb tribal knowledge. Trigger on "test on the device", "verify on the tablet/phone", "device pass", "beta round", "fix round", "does it work on the real device", "I found this on my phone", adb/screencap/logcat work, or any claim that a fix is complete.
 ---
 
 # device-verification
@@ -11,9 +11,9 @@ The discipline that closes the loop between "the suite is green" and "it works".
 
 **A fix is done when it survives the device, not when it merges.** Green tests prove the code does what you told it to; only hardware proves you told it the right thing. *A celebration animation passed its tests and rendered invisibly. A breathing glyph was device-verified, then reopened twice — too subtle to notice, then unreadable at 20 px.*
 
-## The V-list
+## The device-only list
 
-Anything the build cannot prove goes on an explicit list, flagged **unverified** rather than assumed working. Never let "tests pass" stand in for these:
+Anything the build cannot prove goes on an explicit list, flagged **unverified** rather than assumed working. **Do not call it a "V-list" or give its entries a letter series** — it is part of the live round's doc and its items are numbered like everything else (`execution-planning` § Numbering). Never let "tests pass" stand in for these:
 
 - OS share sheets, intents, browser hand-offs, tap-to-dial
 - Notifications and scheduled reminders
@@ -51,8 +51,9 @@ Before a procedure is written down: execute it, confirm the state it claims to p
 
 ## Running a fix round
 
-- **One round file per device pass**, with a stable finding-ID scheme. Log the finding when it is reported, tick it when the fix lands.
-- **Cite findings round-qualified — `R8-B2`, not `B2`.** The letter series is stamped into commit messages and can never be renamed, but on its own it forces every reader to remember which round owned which letter. Anything that is *not* a device-test finding — a plan, a product change — uses `<phase>.<item>` numbering instead (`execution-planning` § Numbering and the phase table). Do not start a new letter series for a plan.
+- **The live round gets its OWN doc**, one file per round, and it is the working document for as long as that round is open. A consolidated `beta-rounds`-style file is a **summary of CLOSED rounds** — history, not a work list — and an open-items list is a candidate pool, not a round. Running a live round out of either is the drift this rule exists to stop: findings end up in three places, and none of them is authoritative.
+- **The round doc opens with its tracker table, directly under the H1**, nothing above it (`execution-planning` § Numbering and the phase table). Log the finding when it is reported, tick it when the fix lands.
+- **Number findings `R<round>-<phase>.<item>` and cite them round-qualified** — `R3-1.1`, never a bare `1.1`. **`R` is the only letter in the scheme.** Do not open a new letter series for a round, a checklist, or a backlog, however many old ones you see in the neighbouring docs — see `execution-planning` § Numbering. Legacy letters stamped into commit messages are quoted verbatim when citing that commit and extended never.
 - **Reproduce first.** No lane, no fix, no estimate on an unreproduced defect.
 - **One owner per defect** — two reports with one suspected cause are one fix, or the same defect gets fixed twice and shipped once.
 - **Never open a lane on an undecided point.** An ambiguous spec is a product call, not an implementation detail; guessing wastes the lane either way. *One round lost a full rebuild to a spec whose two sections contradicted each other.*

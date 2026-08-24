@@ -79,18 +79,36 @@ A spawn prompt is executed literally by an agent with no way to notice it is wro
 
 ## Numbering and the phase table — the GenX standard
 
-**Plan items are numbered `<phase>.<item>`, never lettered.** Phase 4's items are 4.1, 4.2, 4.3.
-Letter-prefixed ids (`B5`, `X12`, `W3`) are reserved for **device-test round findings**, where
-they are stamped into commit messages and cannot be renamed — and even there, cite them
-**round-qualified** (`R8-B2`, `R6-X12`) so a reader knows which round owns the letter without
-memorising the alphabet. A plan that invents its own letter series is the thing this rule exists
-to stop: after a few rounds nobody can tell `W3` from `X3` from `B3`, and every cross-reference
-becomes a lookup.
+**Everything is numbered. `R` is the only letter in the scheme, and only as a round prefix.**
 
-**Every plan opens with a phase table — the very first thing under the H1, above everything
-else.** Not below a framing blockquote, not below a RESUME block, not below "why this exists".
-The operator opens a plan to see *where the work is*, usually on a phone, and anything above the
-table is something they have to scroll past to get the one answer they came for.
+| Kind of id | Form | Example |
+|---|---|---|
+| Plan item | `<phase>.<item>` | `4.2` — phase 4, item 2 |
+| Round finding | `R<round>-<phase>.<item>` | **`R3-1.1`** — round 3, phase 1, item 1 |
+| Round finding, flat round | `R<round>-<item>` | `R10-2` |
+| Series no round owns | `<word>-<item>` | `backlog-8`, `verification-3` |
+
+Phase 4's items are 4.1, 4.2, 4.3 — never `B5`, `X12`, `W3`. **Never start a letter series**, for
+any reason: not for a plan, not for a round's findings, not for a device checklist, not for a
+deferred backlog, and *especially* not because a neighbouring doc already has one. After a few
+rounds nobody can tell `W3` from `X3` from `B3`, every cross-reference becomes a lookup, and the
+operator ends up repairing the docs by hand. If a letter feels necessary, what the scheme
+actually needs is **another number level** (`R3-1.1.2`), not another alphabet.
+
+Cite round findings **round-qualified** — `R3-1.1`, never a bare `1.1` — because a bare item
+number is ambiguous the moment it leaves its own round's file. Ids are never reused.
+
+**Legacy letter ids are frozen history, not a precedent.** Where an old series (`F#`, `X#`, `Z#`,
+`V#`, `L#`…) is stamped into commit messages it cannot be renamed, so quote it verbatim when
+citing that commit — and do not extend it, mirror it, or take it as licence to open a new one.
+
+**Every plan opens with its tracker table — the very first thing under the H1, above everything
+else.** Not below a framing blockquote, not below a RESUME block, not below "why this exists",
+not below an overview, a status paragraph, or a "this file replaces…" note. The operator opens a
+plan to see *where the work is*, usually on a phone, and anything above the table is something
+they have to scroll past to get the one answer they came for. **This applies to every tracked
+doc, not just plans** — a round file, an open-items list and a consolidated history all open with
+their own table on the same terms.
 
 ```markdown
 # Plan: <name>

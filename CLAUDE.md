@@ -84,6 +84,31 @@ Language-specific style (Effective Dart, Airbnb JS, etc.) lives in the relevant 
 
 ---
 
+## Plan Docs, Trackers & Numbering
+
+Three rules, non-negotiable, in **every** project. They are not style preferences — sessions keep
+drifting off them and I end up repairing docs by hand.
+
+1. **The tracker goes at the HEAD of the doc.** Directly under the H1 title, and **nothing** goes
+   above it: no framing blockquote, no "why this exists", no RESUME, no overview, no status
+   paragraph. I read these on a phone, and the tracker is the one thing I opened the doc for.
+   Order is fixed: **title → tracker table → glyph legend → everything else.**
+2. **Numbers, not letters. `R` is the only letter I ever want to see**, and only as a round
+   prefix. A round-3 item is **`R3-1.1`**. No `F#`/`X#`/`Z#`/`V#`/`L#`-style series, ever, and
+   **never start a new letter series** — not for a plan, not for a round, not for a backlog, not
+   because a series "already exists". If a letter feels necessary, what you actually need is
+   another number level. **A series no round owns takes a WORD prefix, never an initial** —
+   `backlog-8`, `verification-3`, `blocker-2` — so it stays readable without a lookup table.
+3. **The round in progress gets its OWN doc** — one file per round, and it is the working
+   document while that round is live. A consolidated rounds file is a **summary of closed
+   rounds**: history, not a work list. Never run a live round out of the summary, and never run
+   it out of the open-items list either.
+
+Detail → `execution-planning` § Numbering and the phase table · `device-verification`
+§ Running a fix round.
+
+---
+
 ## Vibe Coding Philosophy
 
 - Describe **what** I want — you figure out **how**.
