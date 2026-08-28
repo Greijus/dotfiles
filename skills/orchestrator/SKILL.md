@@ -89,14 +89,25 @@ Integration checkpoints prove the slice *works*; audit gates prove it's *sound*.
 checkpoint (or on a fixed cadence), each by a **fresh, independent agent** — never the lane that
 wrote the code, never you on your own plan:
 
-- **Architecture/code audit** — the merged diff since the last gate against the `clean-code`
-  rubric (SOLID, design seams, tests, comments). Output findings with `file:line` + severity.
-  **Verify before fixing:** confirm each finding, turn it into a remediation task, and **re-audit
-  after it lands** — swapping a foundational impl (fakes→real, in-memory→persistent) amplifies any
-  latent consumer bug, so the safe order is fix-consumers-*then*-swap.
+- **Architecture/code audit** — run the built-in **`/code-review`** on the lane branch or the
+  merged diff since the last gate (`/code-review high <branch|path>`). It returns structured
+  findings **without the diff entering your context**, which is exactly what § Your context is the
+  scarce resource is protecting — so reviewing a lane by reading its diff yourself is the mistake
+  this bullet exists to prevent. Raise the effort level for a foundational lane or a wide blast
+  radius. What it does not judge — design seams, whether a test proves an effect or an artifact,
+  comment intent — goes to a fresh agent against the `clean-code` rubric. Findings carry
+  `file:line` + severity. **Verify before fixing:** confirm each finding, turn it into a
+  remediation task, and **re-audit after it lands** — swapping a foundational impl (fakes→real,
+  in-memory→persistent) amplifies any latent consumer bug, so the safe order is
+  fix-consumers-*then*-swap.
 - **Plan audit** — the plan itself: is every task still executable from Files·Spec·Acceptance by a
   fresh agent? Any sequencing/integration-order hazard? Contracts still complete? Trackers honest
   (no optimistic ticks, no merged-but-unticked drift)?
+
+**`/code-review ultra` is operator-triggered and billed — you cannot launch it**, so never attempt
+it via Bash or the Skill tool. When a lane earns one (a data migration, a data-loss surface, the
+last gate before a beta cut), recommend it in a survey and keep working on whatever the answer
+doesn't block.
 
 Findings feed back as tasks, not just notes — an unactioned audit is theatre.
 
