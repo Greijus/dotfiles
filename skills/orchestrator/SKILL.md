@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Use this skill whenever the operator puts you in the orchestrator seat for a session — running an existing plan by spawning model-matched agents in isolated worktrees, keeping your own context lean by delegating the plumbing, reviewing what comes back, and landing lane work onto rc/ or main. Covers the delegate-don't-do rule, what may and may not enter the orchestrator's context, model routing per task, writing and auditing the spawn brief, supervising lanes, running audit gates with fresh agents, and being the single integrator who rebases/merges and resolves conflicts. Trigger on "you're the orchestrator", "act as orchestrator", "orchestrate this", "spawn agents for this", "delegate this", "run the plan", "run these lanes", "land the lanes", "review the agents' work", "keep your context lean", or any session that starts by declaring the role. The runtime half of `execution-planning`.
+description: Use this skill whenever the operator puts you in the orchestrator seat for a session — running an existing plan by spawning model-matched agents in isolated worktrees, keeping your own context lean by delegating the plumbing, reviewing what comes back, and landing lane work onto rc/ or main. Covers the delegate-don't-do rule, what may and may not enter the orchestrator's context, model routing per task, writing and auditing the spawn brief, supervising lanes, running audit gates with fresh agents, being the single integrator who rebases/merges and resolves conflicts, keeping the plan's status trackers true in real time as lanes land, and sweeping every document the round touched before the round is called done. Trigger on "you're the orchestrator", "act as orchestrator", "orchestrate this", "spawn agents for this", "delegate this", "run the plan", "run these lanes", "land the lanes", "review the agents' work", "keep your context lean", or any session that starts by declaring the role. The runtime half of `execution-planning`.
 ---
 
 # orchestrator
@@ -134,9 +134,43 @@ planning the remediation is a different, deliberately-invoked procedure → `cod
   and find out why.
 - **Never hand-merge generated files** — resolve the source (`.arb`, schema, manifest) and re-run
   the generator.
-- **You own the tracker.** Ticking is yours, which also keeps the plan file off the merge-hotspot
-  list. Watch for drift: unmerged lane work isn't in the boxes, so "not ticked" ≠ "not started" —
-  check the worktrees and branches for true status.
+- **You own the tracker** — see § Keep the record current. Ticking being yours is also what keeps
+  the plan file off the merge-hotspot list.
+
+## Keep the record current
+
+The plan is what the operator reads on a phone and what the next fresh-context session acts on.
+**A tracker that only becomes true at the end of the round is false for the whole round.**
+
+- **Tick at every landing, not at the end.** The fast-forward and the tracker edit are one unit of
+  work — a lane is not landed until its boxes say so. Per *landing*, not per commit: batching that
+  way is what keeps the bookkeeping from outweighing the fixes (`execution-planning` § The plan is
+  durable memory).
+- **Mark an item `⊡` the moment work starts on it**, in the same edit that lands the half. An
+  item being built reads exactly like an item nobody has begun, and that is how a session
+  re-plans work that is already half done.
+- **Never tick ahead of the gate.** `✅` means the suite is green on the integrated tree; `⭐`
+  means a device proved it. When in doubt the lower glyph is the honest one.
+- **A rebase invalidates any sha you recorded early** — tick after the fast-forward, quoting the
+  post-rebase sha (`git-workflow` § Release-candidate branches).
+- **Watch for drift in the other direction too:** unmerged lane work isn't in the boxes, so "not
+  ticked" ≠ "not started" — check the worktrees and branches for the true state.
+
+**Close every round with a documentation sweep** — a task with an owner, before the round is
+declared done, never a hope. Walk what the round touched and make it true:
+
+- the **plan / round file** — statuses, what landed differently from the plan and *why* (an item
+  closed by investigation with no code change is a result, not a gap);
+- **specs and product docs** whose described behaviour the round changed — the diff that changes
+  behaviour owns the line describing it (`clean-code`);
+- **blast-radius maps** the round invalidated — re-verify the cards it touched, dated
+  (`blast-radius-map`);
+- **open items and decisions** — new operator calls added, answered ones struck;
+- the **version marker**, if a build was cut (`beta-versioning`).
+
+Then state plainly what is *still not true*: the owed device pass, the unanswered decision, the
+item that closed at 198 lines against a 150-line target. A round that ends "mostly accurate"
+opens the next one with a reconciliation pass nobody planned.
 
 ## Talking to the operator
 
