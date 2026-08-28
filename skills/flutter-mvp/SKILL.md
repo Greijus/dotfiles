@@ -1,6 +1,6 @@
 ---
 name: flutter-mvp
-description: Use this skill whenever working on Flutter mobile apps under GenX Labs — scaffolding a new app, adding features, reviewing code, fixing UI defects, or making architectural decisions. Covers project layout, Effective Dart style, the MVP-discipline rules (no premature backend, no premature billing, no premature CI/CD), the before-calling-UI-done device checklist (font scale, themes, contrast, animations), binary-asset and launcher-icon rules, and the documentation and code-quality bar. Trigger for any task involving Dart files, pubspec.yaml, Flutter widgets, theming, layout or text-scale problems, app icons and image assets, or app architecture decisions.
+description: Use this skill whenever working on Flutter mobile apps under GenX Labs — scaffolding a new app, adding features, reviewing code, fixing UI defects, or making architectural decisions. Covers project layout, Effective Dart style, the hardened `analysis_options.yaml` baseline (and the lint rules deliberately left off), the MVP-discipline rules (no premature backend, no premature billing, no premature CI/CD), the before-calling-UI-done device checklist (font scale, themes, contrast, animations), binary-asset and launcher-icon rules, and the documentation and code-quality bar. Trigger for any task involving Dart files, pubspec.yaml, Flutter widgets, theming, layout or text-scale problems, app icons and image assets, or app architecture decisions.
 ---
 
 # flutter-mvp
@@ -46,6 +46,35 @@ Move a widget into `shared/` only when a second feature actually needs it.
 - DRY after 3 repetitions, not 2.
 - DartDoc on every public API.
 
+### The analyzer baseline
+
+`flutter create` writes a stock `analysis_options.yaml` with every example commented out and **no
+`analyzer:` section at all** — strict casts, inference and raw types off. Ship this instead, from
+day one; retrofitting it onto a grown app was a whole audit phase on pray:
+
+```yaml
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+linter:
+  rules:
+    unawaited_futures: true
+    avoid_dynamic_calls: true
+    prefer_final_locals: true
+    always_declare_return_types: true
+```
+
+**Deliberately left off:** `cascade_invocations` and `directives_ordering` — on pray they were
+118 of 148 hits and bought nothing. `use_build_context_synchronously` is already on via
+`flutter_lints`; re-adding it is noise. Turning this on late is ~25 real fixes on a 30k-line app,
+mostly untyped `MaterialPageRoute`s and genuinely unawaited futures — **read those three or four
+unawaited navigation calls rather than reflexively wrapping them in `unawaited()`.**
+
 ## Widget rules of thumb
 
 - `const` everywhere valid.
@@ -83,7 +112,7 @@ Assets have physics no widget test touches. Verify properties mechanically befor
 1. Create `<app-name>/` as a sibling of the dotfiles repo under the workspace root (the root differs per machine — see CLAUDE.md § Project Layout).
 2. `flutter create --org com.genxlabs --platforms android` (add ios/web only when explicitly scoped).
 3. Lay out the structure above with empty placeholders — no speculative code.
-4. Add `analysis_options.yaml` extending `package:flutter_lints/flutter.yaml`.
+4. Add `analysis_options.yaml` — the hardened baseline in § Code quality bar, not the stock one.
 5. `git init` and stage the scaffold; hand off to the operator to commit as `chore(init): scaffold flutter project` (see `git-workflow` skill).
 6. Add a `CLAUDE.md` that routes to the dotfiles `CLAUDE.md` plus project-specific context.
 7. **Give each build variant its own `applicationId`** (a `.dev` suffix on debug) and gitignore the signing config — do this at scaffold time, not at beta 4. The operator dogfoods on a personal device; without separate install identities a routine `flutter run` uninstalls the dogfood app and takes its real data with it. *That is not hypothetical — it cost a real prayer history.* Verify schema migrations on a genuinely upgraded install, never by uninstall/reinstall.

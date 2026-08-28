@@ -26,6 +26,7 @@ Whole-system architecture rules written today would generalize from a single ins
 - A **backend / external-service boundary** (e.g. Supabase) — shared state leaves the device.
 - A **second package or module** — the dependency direction between them now needs a rule.
 - A **sync / offline-conflict layer** — "which write wins" becomes a real question.
+- An **aggregate root grows past ~15 fields, or is written whole by more than three callers** — the storage/ownership model has become a system question, not a class question. *On pray this fired invisibly: a 32-field profile written whole by 29 call sites produced a silent last-writer-wins race, and none of the three trip-wires above ever fires on a local-only app.*
 - The operator asks to **start an ADR log** or build this skill out.
 
 Any one of these means n≥2 on a system-level concern. Then write the skill.

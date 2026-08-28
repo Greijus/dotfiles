@@ -1,6 +1,6 @@
 ---
 name: clean-code
-description: Use this skill whenever writing a new function, class, or feature, FIXING A BUG, making an architecture or "should I split this" call, or writing/reviewing unit tests and CI setup in any GenX Labs project. Covers SOLID principles with smell→fix guidance, the minimal-comment rule, the blast-radius discipline for bug fixes, the test-the-effect rule, and the GitHub Actions CI template that gates merges. Trigger for any new code being written, any bug fix or defect investigation ("fix this", "it's broken", "this doesn't work", a device-test finding, a fix round), architecture review, test writing, or CI pipeline changes.
+description: Use this skill whenever writing a new function, class, or feature, FIXING A BUG, making an architecture or "should I split this" call, or writing/reviewing unit tests and CI setup in any GenX Labs project. Covers SOLID principles with smell→fix guidance, the minimal-comment rule, the blast-radius discipline for bug fixes, the test-the-effect rule, the enforce-it-don't-document-it disposition that moves any checkable rule into a lint/CI step/test, and the GitHub Actions CI template that gates merges. Trigger for any new code being written, any bug fix or defect investigation ("fix this", "it's broken", "this doesn't work", a device-test finding, a fix round), architecture review, test writing, or CI pipeline changes.
 ---
 
 # clean-code
@@ -39,6 +39,27 @@ When is a seam earned? When you can **name the second implementation** — a fak
 Pure business math (weighting, thresholds, date rules) belongs in a **stateless helper**, not inlined in a service that also does I/O — one reason to change, and testable without a database.
 
 **A fake is dumb state, not a second implementation.** A fake exists so a test can run without the real dependency — it must never re-derive the rules. *Smell:* a behavioral change touches both `<thing>_impl` and `fake_<thing>`, and a `fake_<thing>_test` mirrors the real suite. *Fix:* extract the rule into a pure core both call, or back the fake with the same derivation over an in-memory store. On pray-app a 261-line fake re-implemented the challenge rules on its own state model, so a single rule change had to be written twice and pinned twice — a tax charged on every future change, and two answers free to drift apart.
+
+## Enforce it, don't document it
+
+A rule that lives only in prose is a rule nothing checks. **This file's own fake-duplication
+example is the proof:** it cited a 261-line fake as the worked case, and the file grew to 362
+lines anyway, with the rule written down the whole time.
+
+So the default disposition of any rule you are tempted to write down:
+
+- **Expressible as a lint, a CI step, or a test? Move it there.** Layering invariants become an
+  import test; a naming or ordering rule becomes an analyzer rule; a token scale becomes a test
+  that fails on a raw literal; a lookup table becomes a coverage assertion against its corpus.
+- **Freeze the violations you are accepting in an allowlist that fails on new *and* stale
+  entries** — a list that can only shrink. An allowlist that merely rejects additions is
+  permanent debt with a comment on it.
+- **Prose keeps only the judgement calls** — when to split, what a seam is worth, which trade to
+  price. Those cannot be executed, which is exactly why they earn the words.
+- Adding a paragraph to a skill that was already ignored repeats the failure. If a rule was
+  broken while written down, the fix is a gate, not a rewrite.
+
+Auditing a whole codebase for where this has already happened → `code-audit`.
 
 ## Testing
 
