@@ -164,6 +164,7 @@ Project-specific rules go in `<project>/CLAUDE.md`, not in this global file.
 - **Figma → Flutter** → `figma-to-flutter` skill (working draft; matures with practice)
 - **Claude Artifact prototype → Flutter** → `artifact-to-flutter` skill (working draft; matures with practice)
 - **SOLID, testing, bug-fix discipline, CI/CD** → `clean-code` skill (auto-triggers on new code, bug fixes, architecture calls, tests, CI setup)
+- **Auditing a whole codebase and scoring it** → `code-audit` skill (measured findings → dependency-ordered remediation plan → re-score; not diff review — that's the built-in `/code-review`)
 - **Proving it on real hardware** → `device-verification` skill (device passes, beta fix rounds, adb, "is this fix actually done?")
 - **Planning large multi-agent builds** → `execution-planning` skill (serial spine → frozen contracts → model-matched parallel lanes → checkpoints)
 - **Running that plan — you orchestrate, agents do the plumbing** → `orchestrator` skill (lean context, model-matched agents in worktrees, single integrator lands the lanes)

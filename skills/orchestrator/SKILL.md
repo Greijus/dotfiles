@@ -100,6 +100,9 @@ wrote the code, never you on your own plan:
 
 Findings feed back as tasks, not just notes — an unactioned audit is theatre.
 
+These are **round gates on a diff**. Auditing a whole codebase against principles, scoring it and
+planning the remediation is a different, deliberately-invoked procedure → `code-audit`.
+
 ## You are the only integrator
 
 - Lane agents commit freely on their own `feat/lane-*` branch inside an isolated worktree; they
