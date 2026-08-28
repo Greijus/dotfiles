@@ -51,4 +51,4 @@ Before you stop, ask: *could a brand-new session, reading only the RESUME block 
 
 ## Not covered here
 
-How the plan/lanes were structured → `execution-planning`. WIP-commit / stash / push mechanics → `git-workflow`. Resuming is just re-reading the RESUME block and re-spawning per `execution-planning`.
+How the plan/lanes were structured → `execution-planning`. Spawning, supervising and landing lanes → `orchestrator`. WIP-commit / stash / push mechanics → `git-workflow`. Resuming is just re-reading the RESUME block and re-spawning per `orchestrator`.

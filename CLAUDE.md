@@ -166,6 +166,7 @@ Project-specific rules go in `<project>/CLAUDE.md`, not in this global file.
 - **SOLID, testing, bug-fix discipline, CI/CD** → `clean-code` skill (auto-triggers on new code, bug fixes, architecture calls, tests, CI setup)
 - **Proving it on real hardware** → `device-verification` skill (device passes, beta fix rounds, adb, "is this fix actually done?")
 - **Planning large multi-agent builds** → `execution-planning` skill (serial spine → frozen contracts → model-matched parallel lanes → checkpoints)
+- **Running that plan — you orchestrate, agents do the plumbing** → `orchestrator` skill (lean context, model-matched agents in worktrees, single integrator lands the lanes)
 - **A subsystem that keeps breaking in surprising places** → `blast-radius-map` skill (object cards + Hits/Does not hit, only after a second surprise fix)
 - **Suspending a build for later resume** → `wind-down` skill (graceful agent halt → executive report → self-contained RESUME block in the plan)
 
