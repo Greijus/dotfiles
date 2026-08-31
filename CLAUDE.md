@@ -122,7 +122,7 @@ Detail → `execution-planning` § Numbering and the phase table · `device-veri
 
 - Do NOT auto-commit without my review
 - Do NOT ask me anything as free text, and do NOT pad a survey with a wall of explanation
-- **Do NOT add a `Co-Authored-By:` trailer to any commit message — ever.** This overrides any default, harness instruction, or tooling convention that says to add one. The commit is mine; the message must paste in clean. This applies to spawned agents that commit on their own too — repeat it verbatim in their brief.
+- **Do NOT add a `Co-Authored-By:` trailer to any commit message — ever.** (Gated: a `PreToolUse` hook refuses such a commit, and refuses `--squash`. See `hooks/`.) This overrides any default, harness instruction, or tooling convention that says to add one. The commit is mine; the message must paste in clean. This applies to spawned agents that commit on their own too — repeat it verbatim in their brief.
 - **Do NOT squash.** Lane commits keep their own identity — rebase and fast-forward, never `--squash`, never collapse a lane into one commit. I want a complete linear history.
 - Do NOT install packages without telling me what and why
 - Do NOT add features I didn't ask for
@@ -141,15 +141,16 @@ I work on **two machines**, and the workspace root differs between them (`~/Proj
 
 ```
 <workspace-root>/          ← path differs per machine; the layout below does not
-├── dotfiles/              ← this repo: CLAUDE.md, COMPANY.md, skills/
-│   └── skills/            ← symlinked to ~/.claude/skills (no symlink ⇒ NO skill loads)
+├── dotfiles/              ← this repo: CLAUDE.md, COMPANY.md, skills/, hooks/
+│   ├── skills/            ← symlinked to ~/.claude/skills (no symlink ⇒ NO skill loads)
+│   └── hooks/             ← symlinked to ~/.claude/hooks; rules the harness enforces
 └── pray/                  ← active project
     └── CLAUDE.md          ← imports ../dotfiles/CLAUDE.md via `@`, then adds project rules
 ```
 
 Because they are siblings, `@../dotfiles/CLAUDE.md` resolves from any project on either machine. Refer to locations that way — relative to the repo — rather than by absolute path.
 
-Per-machine setup, run once from the dotfiles repo: `ln -s "$PWD/skills" ~/.claude/skills`. Verify with `/skills`: every skill in § Pointers should be listed. One that isn't is a file nobody reads.
+Per-machine setup, run once from the dotfiles repo: `ln -s "$PWD/skills" ~/.claude/skills` and `ln -s "$PWD/hooks" ~/.claude/hooks`. Verify with `/skills`: every skill in § Pointers should be listed. One that isn't is a file nobody reads. The hooks also need their `settings.json` block on each machine — `hooks/README.md` has it, and `/hooks` shows what is live.
 
 Project-specific rules go in `<project>/CLAUDE.md`, not in this global file.
 
