@@ -111,7 +111,7 @@ construction. Land each lane by **rebase, then fast-forward** — never a merge 
 
 ```
 git rebase rc/<version>                 # on the lane branch, in its worktree; conflicts resolved here
-# gate: lint + full test suite, from the project dir
+# gate: lint + full test suite, from the project dir, under `testlock run checkout` (device-verification)
 git merge --ff-only feat/lane-<name>    # from rc/<version>
 git worktree remove <path>              # landed and green → the worktree goes now
 git branch -d feat/lane-<name>          # -d, never -D: it refuses unless truly merged

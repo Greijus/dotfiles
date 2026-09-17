@@ -10,6 +10,7 @@ checkable moves here, and prose keeps the judgement calls.
 | Hook | Event | What it does |
 |---|---|---|
 | `block-history-damage.py` | `PreToolUse` · Bash | **Refuses** the two operations that damage history irreversibly: a commit carrying the forbidden co-author trailer (inline `-m`, or hidden in a `-F` message file), and a squash merge. Both are absolute in CLAUDE.md, and both are a two-token check. |
+| `require-testlock.py` | `PreToolUse` · Bash | **Refuses** checkout work (`flutter test/build/run/install/pub/analyze/…`, `dart test/run/pub`, `gradlew`) and device work (`flutter run/install/drive/attach`, any `adb` that is not read-only) unless it runs inside `testlock run`, or this session holds a live `testlock` lease. Parallel sessions otherwise collide on the one device and on a checkout's `build/`. See `device-verification` § Sharing the device and the checkout. |
 | `review-before-stop.sh` | `Stop` | One self-review pass against `checklist.md` before the turn ends. |
 
 ## Tokenize, don't grep
@@ -23,6 +24,23 @@ shell syntax from quoted data.
 `python3 hooks/test_block_history_damage.py` covers both directions — 20 cases, and the **allow**
 cases are the ones that matter. A gate that blocks legitimate work gets switched off, and then it
 protects nothing.
+
+## The testlock gate knows whose lease it is
+
+`testlock` stamps `$CLAUDE_CODE_SESSION_ID` into every lock; the hook compares it with the
+payload's `session_id`. A lease only counts while it is unexpired and not a `run` lock (a
+`run` lock means a command is already going — a second bare one would collide). A subagent
+shares its parent's session id, so an orchestrator's lease covers its agents: agents in their
+own worktrees never share a checkout lock anyway, but only one of them should drive the device.
+
+Read-only adb (`devices`, `logcat`, `pull`, `shell`/`exec-out` with `screencap`, `dumpsys`,
+`getprop`, `pm list`, `settings get`, …) stays free, so a waiting session can still look.
+Known holes, accepted: a command hidden in `bash -c`, a script or a Makefile, and a
+multi-line command whose later line runs flutter (newlines tokenize as whitespace — the
+price of not misreading heredocs). The operator can switch the gate off with
+`TESTLOCK_ENFORCE=0` in the environment Claude Code starts in.
+
+`python3 hooks/test_require_testlock.py` — 43 cases, both directions.
 
 ## The Stop hook is deliberately scoped
 
@@ -53,7 +71,9 @@ the second machine needs this block added by hand:
 "hooks": {
   "PreToolUse": [
     { "matcher": "Bash",
-      "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/block-history-damage.py" }] }
+      "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/block-history-damage.py" }] },
+    { "matcher": "Bash",
+      "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/require-testlock.py", "timeout": 10 }] }
   ],
   "Stop": [
     { "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/review-before-stop.sh",

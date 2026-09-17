@@ -68,6 +68,7 @@ Auditing a whole codebase for where this has already happened → `code-audit`.
 - Cover the edge cases and error paths that would actually break in production, not a coverage percentage.
 - Dart: `test/` mirrors `lib/` — `lib/features/prayer/prayer_controller.dart` → `test/features/prayer/prayer_controller_test.dart`.
 - Can't unit-test a function without a real device/network/database? That's the Dependency Inversion smell above — fix the design, don't skip the test.
+- Other sessions may share the checkout: run the suite under the checkout lock, and move to a worktree when it is busy → `device-verification` § Sharing the device and the checkout.
 
 ### Assert the effect, not the artifact
 

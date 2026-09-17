@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# testlock — a cross-session mutex for the shared test device and for test/build runs in one checkout.
+#
+# Resources:
+#   device     one per adb serial ($ANDROID_SERIAL, else `adb get-serialno`); machine-wide.
+#   checkout   one per git working tree (the dir given with -C, default $PWD). A worktree is a
+#              different checkout, so it has its own lock — that is the escape hatch.
+#
+# Commands:
+#   testlock status
+#   testlock acquire  <device|checkout> --owner WHO [--ttl MIN] [--wait SEC] [-C DIR]
+#   testlock renew    <device|checkout> --owner WHO [--ttl MIN] [-C DIR]
+#   testlock release  <device|checkout> --owner WHO [--force] [-C DIR]
+#   testlock run      <device|checkout> --owner WHO [--wait SEC] [-C DIR] -- CMD...
+#
+# acquire/renew/release hold a lease across many tool calls (a device pass); it expires after
+# --ttl minutes (default 30) unless renewed. `run` holds the lock only while CMD runs, in DIR,
+# and frees it on exit; a run-held lock whose process died is stale.
+#
+# Exit codes: 0 ok · 75 busy (held by someone else, or --wait ran out) · 2 usage · else CMD's code.
+#
+# Enforced by dotfiles hooks/require-testlock.py: a guarded command runs only inside `testlock run`,
+# or while this session ($CLAUDE_CODE_SESSION_ID, stamped into the lock) holds a live lease.
+
+set -u
+
+LOCK_ROOT="${TESTLOCK_DIR:-/tmp/genx-testlocks}"
+BUSY=75
+POLL=10
+
+die() { echo "testlock: $*" >&2; exit 2; }
+now() { date +%s; }
+
+resource_key() {
+  local res="$1" dir="$2" serial top
+  case "$res" in
+    device)
+      serial="${ANDROID_SERIAL:-}"
+      if [ -z "$serial" ] && command -v adb >/dev/null 2>&1; then
+        serial="$(adb get-serialno 2>/dev/null | tr -d '\r')"
+      fi
+      [ -z "$serial" ] || [ "$serial" = "unknown" ] && serial="default"
+      echo "device-${serial//[^A-Za-z0-9._-]/_}"
+      ;;
+    checkout)
+      top="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || die "$dir is not in a git checkout"
+      echo "checkout${top//[^A-Za-z0-9._-]/_}"
+      ;;
+    *) die "unknown resource '$res' (device|checkout)" ;;
+  esac
+}
+
+field() { sed -n "s/^$2=//p" "$1/info" 2>/dev/null; }
+
+describe() {
+  local d="$1" exp pid left
+  exp="$(field "$d" expires)"; pid="$(field "$d" pid)"
+  if [ -n "$pid" ]; then left="while pid $pid runs"; else left="expires in $(( (exp - $(now)) / 60 )) min"; fi
+  echo "$(basename "$d"): held by '$(field "$d" owner)' since $(date -d "@$(field "$d" since)" '+%H:%M') ($left) — $(field "$d" what)"
+}
+
+is_stale() {
+  local d="$1" exp pid
+  [ -f "$d/info" ] || return 0
+  pid="$(field "$d" pid)"
+  if [ -n "$pid" ]; then ! kill -0 "$pid" 2>/dev/null; return; fi
+  exp="$(field "$d" expires)"
+  [ -n "$exp" ] && [ "$exp" -le "$(now)" ]
+}
+
+write_info() {
+  local d="$1" owner="$2" ttl="$3" pid="$4" what="$5"
+  {
+    echo "owner=$owner"
+    echo "since=$(now)"
+    echo "expires=$(( $(now) + ttl * 60 ))"
+    echo "pid=$pid"
+    echo "session=${CLAUDE_CODE_SESSION_ID:-}"
+    echo "what=$what"
+  } > "$d/info.tmp" && mv "$d/info.tmp" "$d/info"
+}
+
+try_take() {
+  local d="$1" owner="$2" ttl="$3" pid="$4" what="$5"
+  if mkdir "$d" 2>/dev/null; then
+    write_info "$d" "$owner" "$ttl" "$pid" "$what"; return 0
+  fi
+  if [ "$(field "$d" owner)" = "$owner" ] && [ -z "$pid" ]; then
+    write_info "$d" "$owner" "$ttl" "" "$what"; return 0
+  fi
+  if is_stale "$d"; then
+    echo "testlock: breaking stale lock — $(describe "$d")" >&2
+    rm -rf "$d"
+    mkdir "$d" 2>/dev/null && { write_info "$d" "$owner" "$ttl" "$pid" "$what"; return 0; }
+  fi
+  return 1
+}
+
+take() {
+  local d="$1" owner="$2" ttl="$3" pid="$4" what="$5" wait="$6" deadline announced=""
+  deadline=$(( $(now) + wait ))
+  until try_take "$d" "$owner" "$ttl" "$pid" "$what"; do
+    if [ "$(now)" -ge "$deadline" ]; then
+      echo "BUSY — $(describe "$d")" >&2; return $BUSY
+    fi
+    [ -n "$announced" ] || { echo "waiting (up to ${wait}s) — $(describe "$d")" >&2; announced=1; }
+    sleep "$POLL"
+  done
+}
+
+cmd="${1:-}"; [ -n "$cmd" ] || die "usage: testlock status|acquire|renew|release|run ..."; shift
+mkdir -p "$LOCK_ROOT"
+
+if [ "$cmd" = "status" ]; then
+  found=""
+  for d in "$LOCK_ROOT"/*/; do
+    [ -d "$d" ] || continue
+    d="${d%/}"; found=1
+    if is_stale "$d"; then echo "$(describe "$d")  [STALE]"; else describe "$d"; fi
+  done
+  [ -n "$found" ] || echo "no locks held"
+  exit 0
+fi
+
+res="${1:-}"; [ -n "$res" ] || die "$cmd needs a resource (device|checkout)"; shift
+owner="" ttl=30 wait=0 dir="$PWD" force=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --owner) owner="$2"; shift 2 ;;
+    --ttl) ttl="$2"; shift 2 ;;
+    --wait) wait="$2"; shift 2 ;;
+    -C) dir="$2"; shift 2 ;;
+    --force) force=1; shift ;;
+    --) shift; break ;;
+    *) die "unknown option '$1'" ;;
+  esac
+done
+[ -n "$owner" ] || die "--owner is required (e.g. 'rc/1.0b12:R12-3.2 device pass')"
+lock="$LOCK_ROOT/$(resource_key "$res" "$dir")"
+
+case "$cmd" in
+  acquire)
+    take "$lock" "$owner" "$ttl" "" "lease" "$wait" || exit $?
+    echo "acquired — $(describe "$lock")"
+    ;;
+  renew)
+    [ "$(field "$lock" owner)" = "$owner" ] || { echo "not held by '$owner'" >&2; exit $BUSY; }
+    write_info "$lock" "$owner" "$ttl" "" "lease"
+    echo "renewed — $(describe "$lock")"
+    ;;
+  release)
+    [ -d "$lock" ] || { echo "not held"; exit 0; }
+    if [ "$(field "$lock" owner)" != "$owner" ] && [ -z "$force" ]; then
+      echo "held by '$(field "$lock" owner)', not '$owner' — not released (use --force only on the operator's say-so)" >&2
+      exit $BUSY
+    fi
+    rm -rf "$lock"; echo "released"
+    ;;
+  run)
+    [ $# -gt 0 ] || die "run needs a command after --"
+    take "$lock" "$owner" 0 "$$" "$*" "$wait" || exit $?
+    trap 'rm -rf "$lock"' EXIT
+    trap 'exit 130' INT TERM
+    ( cd "$dir" && "$@" )
+    exit $?
+    ;;
+  *) die "unknown command '$cmd'" ;;
+esac

@@ -1,6 +1,6 @@
 ---
 name: device-verification
-description: Use this skill whenever a build is proved (or disproved) on real hardware — running a device-test pass, triaging what the operator found on the phone or tablet, deciding whether a fix is actually done, planning or running a round of beta fixes, or driving a device over adb. Covers the device-only list of things a test suite cannot prove, verifying the mechanism rather than the display, treating device state as evidence, writing forcing procedures that actually work, the round/finding-ID structure for fix cycles, and Android adb tribal knowledge. Trigger on "test on the device", "verify on the tablet/phone", "device pass", "beta round", "fix round", "does it work on the real device", "I found this on my phone", adb/screencap/logcat work, or any claim that a fix is complete.
+description: Use this skill whenever a build is proved (or disproved) on real hardware — running a device-test pass, triaging what the operator found on the phone or tablet, deciding whether a fix is actually done, planning or running a round of beta fixes, or driving a device over adb — and before any session runs the full test suite, a build, or anything on the device while other sessions may be doing the same. Covers the device-only list of things a test suite cannot prove, verifying the mechanism rather than the display, treating device state as evidence, the `testlock` mutex that stops concurrent sessions from colliding on the device or a checkout (test in a worktree or wait), writing forcing procedures that actually work, the round/finding-ID structure for fix cycles, and Android adb tribal knowledge. Trigger on "test on the device", "verify on the tablet/phone", "device pass", "beta round", "fix round", "does it work on the real device", "I found this on my phone", adb/screencap/logcat work, "run the full suite", "flutter test", "is the device free", or any claim that a fix is complete.
 ---
 
 # device-verification
@@ -42,6 +42,41 @@ A screen can be right for the wrong reason. Prove the thing underneath:
 - **Never uninstall when a migration is under test** — surviving real upgraded data is the whole point, and it is the one thing that cannot be un-shipped.
 - **Run vendor defaults untouched first** (Samsung battery optimisation, DND). A failure there is a product finding, not a test artifact.
 - **Order the checks against each other.** Fabricated state can destroy another item's evidence — verify the item that needs a natural history *before* the procedure that manufactures one.
+
+## Sharing the device and the checkout — take the lock
+
+Several sessions run at once, but there is one device and each checkout has one `build/` and `.dart_tool/`. Two sessions flashing the same device, or running `flutter test` / `flutter build` in the same checkout, corrupt each other's run and each other's evidence. Coordinate with `testlock` — no free-form "is anyone using it?", no guessing from `adb devices`:
+
+```
+~/.claude/skills/device-verification/scripts/testlock status
+```
+
+**This is enforced, not advisory:** the `require-testlock.py` hook (dotfiles `hooks/`) refuses a guarded command that is neither inside `testlock run` nor covered by a live lease this session holds, and its refusal says which lock to take. Read-only adb (screencap, dumpsys, logcat, pull) stays free. Do not route around a refusal with `bash -c` or a script — take the lock.
+
+Two resources. The **device** lock is one per adb serial, machine-wide. The **checkout** lock is one per git working tree — a worktree is a different checkout with its own lock, and that is the escape hatch. `--owner` is always `<branch-or-lane>:<what>` (`rc/1.0b12:R12-3.2 device pass`), so `status` tells the other session who to wait for.
+
+**Anything that builds or tests in a checkout runs under the checkout lock** — full suite, a single test file, `flutter build`, `flutter run`, `pub get`, `build_runner`. It is free when nobody else is there, and it releases itself when the command exits or dies:
+
+```
+testlock run checkout --owner "<branch>:full suite" -C <repo>/mobile -- flutter test
+```
+
+**A device pass holds a lease** across many tool calls — install, drive, screencap, read the DB — and releases when done. Renew it before `--ttl` (minutes, default 30) runs out, or it goes stale and anyone may break it:
+
+```
+testlock acquire device --owner "<branch>:R12-3.2 device pass" --ttl 30
+testlock renew   device --owner "<branch>:R12-3.2 device pass" --ttl 30
+testlock release device --owner "<branch>:R12-3.2 device pass"
+```
+
+Build the APK under the checkout lock, then install and drive under the device lock. When the build is handed to the **operator** to verify, keep the device lease for that handover with a long `--ttl` naming it (`--owner "rc/1.0b12:operator verifying R12-3"`) — pending verifications are evidence (§ Device state is evidence), and a lease that runs out would let another session flash over them.
+
+**When the lock is busy (exit 75), do not queue on it idly — pick by resource:**
+
+- **Checkout busy → test in a worktree.** If your change is committed (or you are already a lane), run the suite in your own worktree (`git worktree add`, then `pub get` there) instead of waiting. The first run there is slower, but it rarely loses to a long suite plus a device pass. Uncommitted edits in the shared checkout cannot move — wait with `--wait`.
+- **Device busy → wait for it, and work on something else meanwhile.** There is no second device. Retry with `--wait <sec>` (keep it under ~540 so the Bash call does not time out), or run the wait in the background and carry on with work that does not need hardware: tests in a worktree, docs, the next finding's root cause.
+- **Never break a lock that is not stale**, and never `release --force` one someone else holds unless the operator says so. `status` marks a stale lock (lease expired, or the `run` process died); the next `acquire`/`run` breaks those itself.
+- **Hand the constraint to every agent you spawn.** A subagent that runs tests or touches the device gets the `testlock` lines in its brief (`orchestrator` § Fresh context per agent); a lane in a worktree still takes the device lock.
 
 ## Forcing procedures are code — run them before you record them
 
