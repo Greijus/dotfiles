@@ -1,0 +1,4 @@
+# Built-in skills the Claude app syncs into ~/.claude/skills (a symlink to skills/) — not ours
+skills/synced/
+
+__pycache__/
