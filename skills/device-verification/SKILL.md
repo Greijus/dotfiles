@@ -33,8 +33,12 @@ A screen can be right for the wrong reason. Prove the thing underneath:
 - Count the calls that must not happen (a client that throws if reached, asserted at zero).
 - Inspect **decoded pixels** for anything visual — masks, corners, alpha, aliasing.
 - For a hang or a crash, reproduce the *cause* (corrupt the DB, kill the network), not a lookalike.
+- **Synthetic input is not a finger.** `adb shell input swipe` emits perfectly smooth, high-rate events; a real finger emits small, uneven deltas with pauses. Anything with a threshold, a slop, an arena or a per-frame correction behaves differently under the two. Drive the gesture yourself — `adb shell input motionevent DOWN/MOVE/UP`, one small step at a time — before concluding a reported gesture defect is not real.
+- **A net displacement is not a measurement.** Sample *during* the interaction, not after it: a value that is applied and then reverted every frame averages out to something that looks healthy. Per-step raw framebuffer captures (`adb exec-out screencap` with no `-p`, 12- or 16-byte header then RGBA) cross-correlated against a reference row profile give exact per-frame displacement with no image library on the host.
 
 *A challenge counter looked correct on screen while the field driving it had never moved — the day counter was derived from an event log, not from the field being backdated.*
+
+*An operator-reported scroll defect was measured as "88 px of 100 — no regression" from a smooth synthetic swipe read end-to-end, and the report was nearly written off. Hand-driven motion events reproduced it on the first try: the offset was oscillating between two values and accumulating nothing. **Both halves of that measurement were wrong, and each alone would have been enough to miss it.** When a report and a measurement disagree, suspect the measurement first — the operator has the real input device.*
 
 ## Device state is evidence
 
@@ -102,6 +106,9 @@ Before a procedure is written down: execute it, confirm the state it claims to p
 - Flutter exposes nothing to `uiautomator`, so `adb exec-out screencap -p` is the only way to read the UI. A black screenshot almost always means the device is locked.
 - Only the debug variant is debuggable — all DB and `run-as` work goes to the `.dev` package (`flutter-mvp` § Scaffolding).
 - Watch for freeform/multi-window: screen coordinates, not app coordinates.
+- **`adb shell input motionevent DOWN|MOVE|UP <x> <y>`** (Android 11+) drives a gesture one event at a time from separate shell calls, so you can screencap between steps and inject the slow, uneven movement `input swipe` cannot. The first move past the touch slop is consumed by it — expect no displacement from that one, and do not read it as a defect.
+- **Two builds of the same app coexist** when their `applicationId`s differ, which is how you A/B a suspected regression on one device with the operator's own finger. Establish the *same* state in both before comparing: a control that differs in a setting is not a control, and one toggle (a section expanded on one build, collapsed on the other) can be the entire difference you are attributing to code.
+- **`adb shell dumpsys gfxinfo <pkg>`**, reset and re-read after a few idle seconds, says whether the app is rendering at rest. Zero frames rules out a rebuild storm in one call and saves a long hunt for one.
 
 ## Not covered here
 
