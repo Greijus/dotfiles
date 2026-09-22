@@ -65,6 +65,33 @@ Assign each lane a model matched to the work's difficulty:
   committed and failures nobody has read.
 - Your context accumulates lane **summaries and diffs**, not their transcripts.
 
+### Tests cost the machine, not just the lane
+
+The suite runs on the operator's laptop — the same cores and memory that hold the editor, the
+browser and every other session. *Five lanes each running the full suite at once (2026-09-22,
+pray-app backlog-21) swapped a 4-core / 8 GB machine for a morning, produced two load-only
+flakes, and each flake bought another full run.* `testlock` now rations heavy runs machine-wide
+(`device-verification` § Sharing the device and the checkout), so a lane that ignores this waits
+instead of colliding — but waiting is still the morning gone. Spend the budget on purpose:
+
+- **Iterate on the tests the lane owns; gate on the suite once.** The brief names the test
+  files that mirror the lane's Files (plus `test/architecture/`) and says: run those while
+  fixing, and the full suite exactly once, as the final gate before reporting. A lane that
+  reruns the suite after every edit is the smell.
+- **Never re-run a red suite whole.** Re-run the failing file alone first. A test that passes
+  alone on a busy machine is *probably* a load flake: record the failure message, report it as
+  a flake rather than dropping it, and do not burn another full run on it. It is not a pass —
+  your gate on the integrated tree runs the whole suite again, and that is where an
+  order-dependent failure hiding behind "passes alone" gets caught.
+- **Size the wave from `testlock status`, not from the plan.** `slots: n/cap` says how many
+  lanes can gate at once. Spawn no more lanes than the cap plus one, stagger the rest, and put
+  the slot line in every brief so the lane expects to wait.
+- **Your gate on the integrated tree is the one that counts**, and you land lanes serially
+  anyway — so lane gates are pre-checks, and the `-j` cap is the machine's, not yours to raise.
+- **CI is a second machine** where the project runs the suite on every push (pray-app does). A
+  lane whose branch is pushed can wait on CI instead of the laptop when the machine is full;
+  only the integrator's gate has to be local.
+
 ### Audit the brief against the live repo before spawning
 
 A spawn prompt is executed literally by an agent with no way to notice it is wrong. Auditing one
