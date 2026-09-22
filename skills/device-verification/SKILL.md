@@ -59,6 +59,8 @@ Several sessions run at once, but there is one device and each checkout has one 
 
 Two resources. The **device** lock is one per adb serial, machine-wide. The **checkout** lock is one per git working tree — a worktree is a different checkout with its own lock, and that is the escape hatch. `--owner` is always `<branch-or-lane>:<what>` (`rc/1.0b12:R12-3.2 device pass`), so `status` tells the other session who to wait for.
 
+**A third budget, `slots`, is the machine itself.** Every heavy `run` (flutter, dart, gradlew) also takes one of cores/2 machine-wide slots, waits up to nine minutes for one, and is refused while free memory or load says the machine is full — a worktree of its own does not buy a lane a second machine. The command runs under `nice`, and a `flutter test` that names no `-j` is capped at its share of the cores, so every slot together fills the machine exactly once. `status` prints `slots: 1/2 in use · MemAvailable … · load …`; read it before spawning a lane or deciding to wait. A `flutter` command a lease already covers still owes a slot: `testlock run slots --owner … -- flutter test`. *Five lanes gating at once on a 4-core, 8 GB laptop swapped it for a morning and bought two load-only flakes (pray-app backlog-21, 2026-09-22) — that is what the budget is for.*
+
 **Anything that builds or tests in a checkout runs under the checkout lock** — full suite, a single test file, `flutter build`, `flutter run`, `pub get`, `build_runner`. It is free when nobody else is there, and it releases itself when the command exits or dies:
 
 ```
@@ -78,6 +80,7 @@ Build the APK under the checkout lock, then install and drive under the device l
 **When the lock is busy (exit 75), do not queue on it idly — pick by resource:**
 
 - **Checkout busy → test in a worktree.** If your change is committed (or you are already a lane), run the suite in your own worktree (`git worktree add`, then `pub get` there) instead of waiting. The first run there is slower, but it rarely loses to a long suite plus a device pass. Uncommitted edits in the shared checkout cannot move — wait with `--wait`.
+- **No slot → the machine is full, not the checkout.** A worktree does not help. Let the run wait (it does so by itself) and do the work that needs no build meanwhile — the diff review, the root cause, the docs. Never raise `-j` or set `TESTLOCK_SLOTS` to get past it; that is the operator's call.
 - **Device busy → wait for it, and work on something else meanwhile.** There is no second device. Retry with `--wait <sec>` (keep it under ~540 so the Bash call does not time out), or run the wait in the background and carry on with work that does not need hardware: tests in a worktree, docs, the next finding's root cause.
 - **Never break a lock that is not stale**, and never `release --force` one someone else holds unless the operator says so. `status` marks a stale lock (lease expired, or the `run` process died); the next `acquire`/`run` breaks those itself.
 - **Hand the constraint to every agent you spawn.** A subagent that runs tests or touches the device gets the `testlock` lines in its brief (`orchestrator` § Fresh context per agent); a lane in a worktree still takes the device lock.

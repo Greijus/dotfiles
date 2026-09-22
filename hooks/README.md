@@ -40,6 +40,14 @@ multi-line command whose later line runs flutter (newlines tokenize as whitespac
 price of not misreading heredocs). The operator can switch the gate off with
 `TESTLOCK_ENFORCE=0` in the environment Claude Code starts in.
 
+## The machine budget is the script's job, not the hook's
+
+`testlock run` also rations **slots** — cores/2 heavy runs machine-wide, refused while free memory
+or load says the machine is full, run under `nice`, with `flutter test` capped at its share of
+the cores. The hook does not check slots: it only forces commands through `testlock run`, and
+the script takes the slot from there. Known hole, accepted: a bare `flutter build` under a
+session lease takes no slot (`testlock run slots -- …` is the wrapper for that case).
+
 `python3 hooks/test_require_testlock.py` — 43 cases, both directions.
 
 ## The Stop hook is deliberately scoped

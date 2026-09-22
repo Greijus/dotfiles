@@ -1,21 +1,30 @@
 #!/usr/bin/env bash
-# testlock — a cross-session mutex for the shared test device and for test/build runs in one checkout.
+# testlock — a cross-session mutex for the shared test device and for test/build runs in one checkout,
+# plus a machine-wide budget on how many heavy runs go at once.
 #
 # Resources:
 #   device     one per adb serial ($ANDROID_SERIAL, else `adb get-serialno`); machine-wide.
 #   checkout   one per git working tree (the dir given with -C, default $PWD). A worktree is a
 #              different checkout, so it has its own lock — that is the escape hatch.
+#   slots      a machine-wide count of heavy runs (flutter, dart, gradlew) in flight. `run` takes
+#              one automatically when CMD is heavy, whatever resource it names; `run slots` takes
+#              one on its own, for a command a lease already covers. Capacity is cores/2 (floor 1,
+#              override TESTLOCK_SLOTS), and a slot is also refused while MemAvailable is under
+#              TESTLOCK_SLOT_MB (1024) or the 1-minute load is over TESTLOCK_MAX_LOAD (1.5×cores).
+#              A heavy CMD runs under `nice -n $TESTLOCK_NICE` (10), and a `flutter test` with no
+#              -j of its own gets `-j cores/capacity`, so all slots together fill the machine once.
 #
 # Commands:
 #   testlock status
 #   testlock acquire  <device|checkout> --owner WHO [--ttl MIN] [--wait SEC] [-C DIR]
 #   testlock renew    <device|checkout> --owner WHO [--ttl MIN] [-C DIR]
 #   testlock release  <device|checkout> --owner WHO [--force] [-C DIR]
-#   testlock run      <device|checkout> --owner WHO [--wait SEC] [-C DIR] -- CMD...
+#   testlock run      <device|checkout|slots> --owner WHO [--wait SEC] [-C DIR] -- CMD...
 #
 # acquire/renew/release hold a lease across many tool calls (a device pass); it expires after
 # --ttl minutes (default 30) unless renewed. `run` holds the lock only while CMD runs, in DIR,
-# and frees it on exit; a run-held lock whose process died is stale.
+# and frees it on exit; a run-held lock whose process died is stale. A slot is always run-held.
+# `run` waits for a slot up to --wait seconds, or TESTLOCK_SLOT_WAIT (540) when --wait is not given.
 #
 # Exit codes: 0 ok · 75 busy (held by someone else, or --wait ran out) · 2 usage · else CMD's code.
 #
@@ -27,9 +36,27 @@ set -u
 LOCK_ROOT="${TESTLOCK_DIR:-/tmp/genx-testlocks}"
 BUSY=75
 POLL=10
+SLOT_MB="${TESTLOCK_SLOT_MB:-1024}"
+SLOT_WAIT_DEFAULT="${TESTLOCK_SLOT_WAIT:-540}"
+NICE="${TESTLOCK_NICE:-10}"
 
 die() { echo "testlock: $*" >&2; exit 2; }
 now() { date +%s; }
+
+cores() { nproc 2>/dev/null || echo 1; }
+mem_available_mb() { awk '/^MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo 2>/dev/null || echo 999999; }
+load1() { cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0; }
+max_load() { echo "${TESTLOCK_MAX_LOAD:-$(awk -v c="$(cores)" 'BEGIN {printf "%.1f", c * 1.5}')}"; }
+slot_cap() {
+  local c
+  c=$(( $(cores) / 2 )); [ "$c" -ge 1 ] || c=1
+  echo "${TESTLOCK_SLOTS:-$c}"
+}
+slot_jobs() {
+  local j
+  j=$(( $(cores) / $(slot_cap) )); [ "$j" -ge 1 ] || j=1
+  echo "${TESTLOCK_JOBS:-$j}"
+}
 
 resource_key() {
   local res="$1" dir="$2" serial top
@@ -46,7 +73,7 @@ resource_key() {
       top="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || die "$dir is not in a git checkout"
       echo "checkout${top//[^A-Za-z0-9._-]/_}"
       ;;
-    *) die "unknown resource '$res' (device|checkout)" ;;
+    *) die "unknown resource '$res' (device|checkout|slots)" ;;
   esac
 }
 
@@ -108,6 +135,72 @@ take() {
   done
 }
 
+# Prints why the machine cannot take one more heavy run; prints nothing when it can.
+machine_room() {
+  local mb load max
+  mb="$(mem_available_mb)"
+  [ "$mb" -ge "$SLOT_MB" ] || { echo "MemAvailable ${mb} MB < ${SLOT_MB} MB"; return; }
+  load="$(load1)"; max="$(max_load)"
+  awk -v l="$load" -v m="$max" 'BEGIN {exit !(l > m)}' && echo "load ${load} > ${max}"
+}
+
+slots_in_use() {
+  local d n=0
+  for d in "$LOCK_ROOT"/slot-*/; do
+    [ -d "$d" ] || continue
+    is_stale "${d%/}" || n=$(( n + 1 ))
+  done
+  echo "$n"
+}
+
+# Takes a slot into $slot, waiting up to $1 seconds. Every slot dir is run-held (pid-stamped).
+take_slot() {
+  local wait="$1" owner="$2" what="$3" deadline announced="" why i cap
+  deadline=$(( $(now) + wait ))
+  while :; do
+    why="$(machine_room)"
+    if [ -z "$why" ]; then
+      cap="$(slot_cap)"
+      for i in $(seq 1 "$cap"); do
+        if try_take "$LOCK_ROOT/slot-$i" "$owner" 0 "$$" "$what"; then slot="$LOCK_ROOT/slot-$i"; return 0; fi
+      done
+      why="all $cap slots in use"
+    fi
+    if [ "$(now)" -ge "$deadline" ]; then
+      echo "BUSY — no machine slot: $why. Wait (--wait) and do work that needs no build meanwhile." >&2
+      return $BUSY
+    fi
+    [ -n "$announced" ] || { echo "waiting (up to ${wait}s) for a machine slot — $why" >&2; announced=1; }
+    sleep "$POLL"
+  done
+}
+
+is_heavy() {
+  case "$(basename "${1:-}")" in
+    flutter|dart|gradlew) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# `flutter test` with no concurrency flag of its own gets this machine's per-slot budget.
+cap_flutter_test_jobs() {
+  local a seen_test=""
+  jobs_note=""
+  [ "$(basename "${1:-}")" = "flutter" ] || return 0
+  for a in "$@"; do
+    case "$a" in -j|-j*|--concurrency|--concurrency=*) return 0 ;; esac
+  done
+  capped=()
+  for a in "$@"; do
+    capped+=("$a")
+    if [ -z "$seen_test" ] && [ "$a" = "test" ]; then
+      capped+=("-j" "$(slot_jobs)"); seen_test=1
+      jobs_note="testlock: flutter test capped at -j $(slot_jobs) for this machine (pass -j yourself to override)"
+    fi
+  done
+  [ -n "$seen_test" ] && set_capped=1
+}
+
 cmd="${1:-}"; [ -n "$cmd" ] || die "usage: testlock status|acquire|renew|release|run ..."; shift
 mkdir -p "$LOCK_ROOT"
 
@@ -119,16 +212,18 @@ if [ "$cmd" = "status" ]; then
     if is_stale "$d"; then echo "$(describe "$d")  [STALE]"; else describe "$d"; fi
   done
   [ -n "$found" ] || echo "no locks held"
+  room="$(machine_room)"
+  echo "slots: $(slots_in_use)/$(slot_cap) in use · MemAvailable $(mem_available_mb) MB (need $SLOT_MB) · load $(load1) (max $(max_load))${room:+ · NO ROOM: $room}"
   exit 0
 fi
 
-res="${1:-}"; [ -n "$res" ] || die "$cmd needs a resource (device|checkout)"; shift
-owner="" ttl=30 wait=0 dir="$PWD" force=""
+res="${1:-}"; [ -n "$res" ] || die "$cmd needs a resource (device|checkout|slots)"; shift
+owner="" ttl=30 wait=0 wait_given="" dir="$PWD" force=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --owner) owner="$2"; shift 2 ;;
     --ttl) ttl="$2"; shift 2 ;;
-    --wait) wait="$2"; shift 2 ;;
+    --wait) wait="$2"; wait_given=1; shift 2 ;;
     -C) dir="$2"; shift 2 ;;
     --force) force=1; shift ;;
     --) shift; break ;;
@@ -136,7 +231,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$owner" ] || die "--owner is required (e.g. 'rc/1.0b12:R12-3.2 device pass')"
-lock="$LOCK_ROOT/$(resource_key "$res" "$dir")"
+if [ "$res" = "slots" ]; then
+  [ "$cmd" = "run" ] || die "slots are run-held only: testlock run slots --owner WHO -- CMD"
+  lock=""
+else
+  lock="$LOCK_ROOT/$(resource_key "$res" "$dir")"
+fi
+slot=""
+cleanup() { [ -n "$lock" ] && rm -rf "$lock"; [ -n "$slot" ] && rm -rf "$slot"; return 0; }
 
 case "$cmd" in
   acquire)
@@ -158,10 +260,22 @@ case "$cmd" in
     ;;
   run)
     [ $# -gt 0 ] || die "run needs a command after --"
-    take "$lock" "$owner" 0 "$$" "$*" "$wait" || exit $?
-    trap 'rm -rf "$lock"' EXIT
+    trap 'cleanup' EXIT
     trap 'exit 130' INT TERM
-    ( cd "$dir" && "$@" )
+    if [ -n "$lock" ]; then
+      take "$lock" "$owner" 0 "$$" "$*" "$wait" || { lock=""; exit $BUSY; }
+    fi
+    if [ "$res" = "slots" ] || is_heavy "$1"; then
+      slot_wait="$SLOT_WAIT_DEFAULT"; [ -n "$wait_given" ] && slot_wait="$wait"
+      take_slot "$slot_wait" "$owner" "$*" || exit $BUSY
+      set_capped=""; capped=(); jobs_note=""
+      cap_flutter_test_jobs "$@"
+      [ -n "$set_capped" ] && set -- "${capped[@]}"
+      [ -z "$jobs_note" ] || echo "$jobs_note" >&2
+      ( cd "$dir" && nice -n "$NICE" "$@" )
+    else
+      ( cd "$dir" && "$@" )
+    fi
     exit $?
     ;;
   *) die "unknown command '$cmd'" ;;
