@@ -115,6 +115,7 @@ git rebase rc/<version>                 # on the lane branch, in its worktree; c
 git merge --ff-only feat/lane-<name>    # from rc/<version>
 git worktree remove <path>              # landed and green → the worktree goes now
 git branch -d feat/lane-<name>          # -d, never -D: it refuses unless truly merged
+git push origin --delete feat/lane-<name>   # the lane pushed to gate on CI; its remote goes too
 ```
 
 **Clean up the worktree as part of landing, not "later".** The moment a lane is rebased, gated green and fast-forwarded, its worktree and branch have no reason to exist — the commits are ancestors of `rc/` and nothing is lost. Leaving them behind rots fast: stale worktrees pin dead branches, clutter `git worktree list`, confuse the next session about what is still in flight, and make the round's true state unreadable. `git branch -d` is the safety net — if it refuses, the lane did **not** actually land, so stop and find out why.

@@ -88,9 +88,23 @@ instead of colliding — but waiting is still the morning gone. Spend the budget
   the slot line in every brief so the lane expects to wait.
 - **Your gate on the integrated tree is the one that counts**, and you land lanes serially
   anyway — so lane gates are pre-checks, and the `-j` cap is the machine's, not yours to raise.
-- **CI is a second machine** where the project runs the suite on every push (pray-app does). A
-  lane whose branch is pushed can wait on CI instead of the laptop when the machine is full;
-  only the integrator's gate has to be local.
+- **The lane's full-suite gate runs on CI, not the laptop.** Where the project runs the suite
+  on every push (pray-app does, and its runner beats the laptop 2× on the suite alone), the
+  lane's brief says: push the lane branch, then `gh run watch` the run it starts, in the
+  foreground, and report its verdict. The laptop never runs a lane's full suite. Only the
+  integrator's gate on the rebased tree stays local, under the slot budget, and the pushed RC's
+  own run backstops it. Landing deletes the remote lane branch too
+  (`git push origin --delete feat/lane-<name>`).
+- **Fallback when CI cannot answer: gate locally, say so, keep going.** CI is unavailable when a
+  run sits `queued` past ten minutes, or fails with no step started and a billing or
+  spending-limit annotation — the free allowance (2,000 min/month on a private repo) is spent,
+  or Actions is down. Do not wait it out: the lane runs its gate locally under
+  `testlock run checkout` exactly as before, and its report names the fallback. You then write
+  one line in the round file — *CI allowance hit on <date>, lanes gating locally* — and survey
+  the operator once about paying for the overage; every lane after that gates locally until the
+  operator answers or the month resets. The next spare-minutes saver is already in the workflow
+  (concurrency cancel, APK only on rc/ and main); check it is still there before assuming the
+  cap was hit for a good reason.
 
 ### Audit the brief against the live repo before spawning
 
