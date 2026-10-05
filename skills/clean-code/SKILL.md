@@ -54,6 +54,13 @@ So the default disposition of any rule you are tempted to write down:
 - **Freeze the violations you are accepting in an allowlist that fails on new *and* stale
   entries** — a list that can only shrink. An allowlist that merely rejects additions is
   permanent debt with a comment on it.
+- **A deferral needs a tripwire.** A hook that returns the only value there is — a locale
+  helper that always answers `en`, a feature flag with one state — is not infrastructure; it is
+  a stub that *looks* finished, and nothing can ever exercise the path it stands for. Ship it
+  with the test that fails the day something bypasses it (a pseudo-locale, a second fake
+  tenant, a flag flipped in CI), or the code grows past the recipe and nobody notices.
+  *pray-app: the content-locale hook was a one-line constant for ten weeks; three prose checks
+  written in that time were English-only, each noting it in a code comment nobody re-read.*
 - **Prose keeps only the judgement calls** — when to split, what a seam is worth, which trade to
   price. Those cannot be executed, which is exactly why they earn the words.
 - Adding a paragraph to a skill that was already ignored repeats the failure. If a rule was

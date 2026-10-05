@@ -1,6 +1,6 @@
 ---
 name: flutter-mvp
-description: Use this skill whenever working on Flutter mobile apps under GenX Labs — scaffolding a new app, adding features, reviewing code, fixing UI defects, or making architectural decisions. Covers project layout, Effective Dart style, the hardened `analysis_options.yaml` baseline (and the lint rules deliberately left off), the MVP-discipline rules (no premature backend, no premature billing, no premature CI/CD), the before-calling-UI-done device checklist (font scale, themes, contrast, animations), binary-asset and launcher-icon rules, and the documentation and code-quality bar. Trigger for any task involving Dart files, pubspec.yaml, Flutter widgets, theming, layout or text-scale problems, app icons and image assets, or app architecture decisions.
+description: Use this skill whenever working on Flutter mobile apps under GenX Labs — scaffolding a new app, adding features, reviewing code, fixing UI defects, or making architectural decisions. Covers project layout, Effective Dart style, the hardened `analysis_options.yaml` baseline (and the lint rules deliberately left off), the MVP-discipline rules (no premature backend, no premature billing, no premature CI/CD), the before-calling-UI-done device checklist (font scale, themes, contrast, animations), binary-asset and launcher-icon rules, the localization-ready-from-day-one checklist (one shipped-locale list, locale-keyed content, per-locale rules for any prose check, a test-only pseudo-locale), and the documentation and code-quality bar. Trigger for any task involving Dart files, pubspec.yaml, Flutter widgets, theming, layout or text-scale problems, app icons and image assets, or app architecture decisions.
 ---
 
 # flutter-mvp
@@ -118,6 +118,38 @@ Assets have physics no widget test touches. Verify properties mechanically befor
 5. `git init` and stage the scaffold; hand off to the operator to commit as `chore(init): scaffold flutter project` (see `git-workflow` skill).
 6. Add a `CLAUDE.md` that routes to the dotfiles `CLAUDE.md` plus project-specific context.
 7. **Give each build variant its own `applicationId`** (a `.dev` suffix on debug) and gitignore the signing config — do this at scaffold time, not at beta 4. The operator dogfoods on a personal device; without separate install identities a routine `flutter run` uninstalls the dogfood app and takes its real data with it. *That is not hypothetical — it cost a real prayer history.* Verify schema migrations on a genuinely upgraded install, never by uninstall/reinstall.
+
+## Localization-ready from day one
+
+Ship one language; build so the second is a content job. "i18n-ready" means `gen_l10n` **and**
+all of this — the UI half is enforced by the compiler, the content half only by what you set
+up here. *pray-app learned it the slow way (`docs/plans/localization-infrastructure.md`):
+`gen_l10n` from Phase 0 and a content path helper that always returned `en`; ten weeks later
+four prose checks, the app-written opening, the reference display and 83 tests were English-only.*
+
+- **One `shippedLocales` list, one resolver.** Stored preference → device locale → default,
+  resolved in one function that the UI, the content loader, notifications and any model prompt
+  all read. `supportedLocales` derives from the list, never from which ARBs happen to exist.
+- **Content under `assets/content/<locale>/`, all-or-nothing.** A locale ships complete or not
+  at all; a completeness test says exactly what is missing. No per-asset fallback. Asset paths
+  are resolved per call — a `static final _path = …` caches the first locale for the process.
+- **Prose is content, never a Dart literal.** Anything a user reads comes from an ARB or a
+  content file; a lint over `lib/` for `Text('…')`, `label:`, `title:`, `hintText:` with a
+  shrink-only allowlist of dev screens.
+- **Any code that matches prose reads a per-locale rules table.** Regexes for an address, a
+  closing phrase, a forbidden register, a word tokenizer, a word-count target — data keyed by
+  locale, English's entry moved in verbatim, a test that every shipped locale has one. Unicode
+  classes (`\p{L}`, `unicode: true`), never `[a-z]`.
+- **Canonical keys with a display map.** Ids, tags and lookup keys (a Bible book name, a theme
+  tag) stay in one canonical form in every locale; what the user sees goes through a per-locale
+  label file. A key that is also displayed cannot be translated in place.
+- **A test-only pseudo-locale, from day one.** Generate `xa` from English — every display
+  string accented and padded 40 %, every key untouched — into `test/`, never into assets, and
+  run every content, resolver, display and prose-check test against it. It fails the day
+  someone hardcodes `en`, caches a path, adds an English regex to a check, or prints a key.
+  `gen_l10n`'s `untranslated-messages-file` gated in CI covers the ARB half.
+- **Word counts are per language.** A Finnish prayer says the same thing in ≈70 % of the words;
+  any length floor or target carries a per-locale factor.
 
 ## Not covered here
 
