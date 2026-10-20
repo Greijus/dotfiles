@@ -42,9 +42,19 @@ Typical operator-requested moments: stamping the code state a device test actual
 
 Between markers, all work stays ordinary conventional commits — those need no special permission beyond the project's normal commit policy. Finding-fix rounds get a fix plan with a tracker (see `execution-planning`); the tracker is ticked per fix, and the next marker's changelog is read straight off it when the operator calls for it.
 
+## Privacy-policy gate — before every cut (beta or release)
+
+Once an app's privacy policy and store listing (Play Data safety form, etc.) are set up, **the policy is frozen against the store**: a change to it that is not mirrored in the store is a compliance break. So before drafting or cutting any `Version …` marker:
+
+1. **Diff the policy since the last marker.** Find the previous `Version …` commit (`git log --grep='^Version ' -1`) and run `git diff <that-sha>..HEAD -- <every policy copy>`. Policy copies are project-specific — in pray-app: `mobile/assets/content/en/privacy-policy.md` (in-app) and the site copy in the `belmia-studio` repo (`src/pages/pray/privacy.md`); check the project's CLAUDE.md / open-items for the list.
+2. **Also check what the policy describes**, not just its text: a changed AI provider, a new SDK that transmits data, or new typed input in the prompt changes what the policy and Data safety form must say even when the policy file itself is untouched.
+3. **No change → say so** in the ready-to-cut report ("privacy policy unchanged since `<sha>`").
+4. **Any change → report it prominently and do not cut until it is handled.** List the diff and the data-flow trigger, then state what is owed: the same edit in every policy copy, the hosted public URL redeployed, and the Play Data safety form (and any consent text) updated to match. The operator does the Play Console side; the marker waits until they confirm the store and the hosted policy match.
+
 ## Rules
 
 - **Operator-requested only** (above) — the one rule that overrides convenience.
+- **Run the privacy-policy gate (above) on every cut** — beta or release; a policy change blocks the marker until the store and hosted policy match.
 - One marker per tested build — never reuse or amend a version number that reached a device.
 - The marker commit contains **only** the VERSION bump; fixes never ride in it.
 - **Wire the build to read VERSION** (below) so the string a marker stamps is the one a device reports. Until a project does, its app version is a separate concern the marker commit doesn't touch — but that leaves builds unidentifiable on-device, which defeats the point of stamping them.
