@@ -75,7 +75,11 @@ testlock renew   device --owner "<branch>:R12-3.2 device pass" --ttl 30
 testlock release device --owner "<branch>:R12-3.2 device pass"
 ```
 
-Build the APK under the checkout lock, then install and drive under the device lock. When the build is handed to the **operator** to verify, keep the device lease for that handover with a long `--ttl` naming it (`--owner "rc/1.0b12:operator verifying R12-3"`) — pending verifications are evidence (§ Device state is evidence), and a lease that runs out would let another session flash over them.
+Build the APK under the checkout lock, then install and drive under the device lock.
+
+**Release the device lease the moment your own device work ends** — the install verified, the screenshot read. Never keep it as a long "operator verifying" handover lease: a lease in your session's name locks every *other* session out of the device, and the operator tests on it by hand anyway. Hold a device for the operator only when the operator explicitly asks for it to be reserved. *A deploy to the tablet and the phone held both for 12 h "for the operator's checks"; the operator found other sessions locked out and asked why the hold was not released when the work was done (pray-app, 2026-10-20).* Pending verifications are still evidence (§ Device state is evidence): protect them by saying in the round doc which build each device carries, not by holding the lock.
+
+**With two or more devices attached, name the serial:** `ANDROID_SERIAL=<serial> testlock acquire device …`, and the same on `release`. Without it, `testlock` falls back to `device-default`, which guards no real device.
 
 **When the lock is busy (exit 75), do not queue on it idly — pick by resource:**
 
