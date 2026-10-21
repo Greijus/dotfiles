@@ -16,6 +16,8 @@ truth: every status change is written there first, then printed.
     release.py promote <version> --to <track> --fraction <0-1> --go
     release.py gate    <version> <policy|priv1|sdk>   run one gate against the release worktree,
                                                  without touching the tracker
+    release.py readout <version>                 read tracks, listing, images and subscriptions
+                                                 from Play (read-only) into the state file
 
 Run it from the app repo's main checkout (or pass --repo). It never prints a secret: evidence
 names a path, a count or a check result, never a value.
@@ -72,6 +74,10 @@ STEPS = [
     ('close', 'Close: state file dates, tracker final', 'auto', '`docs/releases/`'),
 ]
 STEP_NO = {key: i + 1 for i, (key, *_rest) in enumerate(STEPS)}
+# Where an auto step's evidence comes from (the tracker's Source column). Manual steps record
+# "manual (<operator>, <date>)" when `done` is run.
+STEP_SOURCE = {'service_account': 'api', 'ci': 'gh', 'gate_policy': 'repo + site', 'upload': 'api',
+               'promote': 'api'}
 CODE_STEPS = range(STEP_NO['format_l10n'], STEP_NO['upload'] + 1)
 
 
@@ -183,9 +189,10 @@ class Tracker:
     def create(ctx: Ctx) -> None:
         ctx.trackers.mkdir(parents=True, exist_ok=True)
         f = ctx.fmt()
-        rows = ['| # | Step | Who | Where | Status | Evidence |', '|---|------|-----|-------|--------|----------|']
+        rows = ['| # | Step | Who | Where | Status | Evidence | Source |',
+                '|---|------|-----|-------|--------|----------|--------|']
         for i, (_key, title, who, where) in enumerate(STEPS, 1):
-            rows.append(f'| {i} | {title.format(**f)} | {who} | {where.format(**f)} | {OPEN} | |')
+            rows.append(f'| {i} | {title.format(**f)} | {who} | {where.format(**f)} | {OPEN} | | |')
         template = (SCRIPTS / 'templates' / 'release-tracker.md').read_text()
         ctx.tracker.write_text(template.format(table='\n'.join(rows), **f))
 
@@ -203,13 +210,16 @@ class Tracker:
     def evidence(self, n: int) -> str:
         return split_row(self.lines[self.row_index(n)])[5]
 
-    def set(self, n: int, status: str, evidence: str | None = None) -> None:
+    def set(self, n: int, status: str, evidence: str | None = None, source: str | None = None) -> None:
         i = self.row_index(n)
         cells = split_row(self.lines[i])
         before = cells[4]
         cells[4] = status
         if evidence is not None:
             cells[5] = cell(evidence)
+            if len(cells) > 6:
+                key = STEPS[n - 1][0]
+                cells[6] = cell(source or (STEP_SOURCE.get(key, 'repo') if evidence else ''))
         self.lines[i] = '| ' + ' | '.join(cells) + ' |'
         if before != status or evidence is not None:
             self.log(f'step {n} {before} → {status}' + (f': {cell(evidence)}' if evidence else ''))
@@ -891,14 +901,34 @@ def guide_from_config(key: str):
     return guide
 
 
+STATE_COLUMNS = ('Declaration', 'Current answer', 'Status', 'Source', 'Last confirmed', 'Re-check when')
+
+
+def state_table(ctx: Ctx) -> tuple[list[str], int, dict[str, int]]:
+    """The declarations table: all lines, the header's index, and each column's position."""
+    lines = ctx.state_file.read_text().splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith('| Declaration |'):
+            cols = {name: j for j, name in enumerate(split_row(line))}
+            missing = [c for c in STATE_COLUMNS if c not in cols]
+            if missing:
+                raise Stop('State table columns missing', f'{ctx.state_file.name} lacks: {", ".join(missing)}.',
+                           f'Its header must be: | {" | ".join(STATE_COLUMNS)} |')
+            return lines, i, cols
+    raise Stop('No declarations table', f'{ctx.state_file} has no "| Declaration |" table.',
+               'Restore it from git.')
+
+
 def state_rows(ctx: Ctx) -> list[dict]:
+    lines, header, col = state_table(ctx)
     rows = []
-    for line in ctx.state_file.read_text().splitlines():
-        if line.startswith('| ') and not line.startswith('| Declaration') and not line.startswith('|---'):
-            c = split_row(line)
-            if len(c) >= 5:
-                rows.append({'name': c[0], 'answer': c[1], 'status': c[2], 'confirmed': c[3],
-                             'inputs': re.findall(r'`([a-z_]+)`', c[4])})
+    for line in lines[header + 2:]:
+        if not line.startswith('| '):
+            break
+        c = split_row(line)
+        rows.append({'name': c[col['Declaration']], 'answer': c[col['Current answer']],
+                     'status': c[col['Status']], 'confirmed': c[col['Last confirmed']],
+                     'inputs': re.findall(r'`([a-z_]+)`', c[col['Re-check when']])})
     return rows
 
 
@@ -956,8 +986,14 @@ def step_sign_in(ctx: Ctx, t: Tracker) -> str:
     if not needs:
         return f'unchanged since {row["confirmed"]}; labels unchanged'
     text = sign_in_text(ctx)
-    limit = ctx.cfg['manual']['sign_in'].get('limit')
-    count = f'[{len(text)}/{limit}]' if limit else f'[{len(text)} chars; check the field\'s limit]'
+    s = ctx.cfg['manual']['sign_in']
+    limit = s.get('limit')
+    # Counted as it will be pasted: with the code in place of the placeholder.
+    length = len(text) - len('<REVIEWER CODE>') + int(s.get('code_length', len('<REVIEWER CODE>')))
+    if limit and length > limit:
+        raise Stop('Sign in text too long', f'{length} characters with the code in place; the field takes {limit}.',
+                   'Shorten `manual.sign_in.text` in release.config.yaml, then run again.')
+    count = f'[{length}/{limit} with the code]' if limit else f'[{length} chars; check the field\'s limit]'
     raise Wait(f'''Step {STEP_NO["sign_in"]} — Sign in details                              (Who: me)
 Where:   Play Console › {ctx.cfg["app"]["name"]} › Policy › App content › App access › Manage
          → "All or some functionality is restricted" → Add instructions
@@ -1091,7 +1127,8 @@ def cmd_done(ctx: Ctx, n: int, evidence: str) -> int:
     if not evidence.strip() or evidence.strip().lower() in ('done', 'ok', 'yes'):
         print('Evidence must say what was seen (a date, count, sha or path), not just "done".')
         return 2
-    t.set(n, DONE, evidence)
+    operator = ctx.cfg['app'].get('operator', 'operator')
+    t.set(n, DONE, evidence, source=f'manual ({operator}, {dt.date.today().isoformat()})')
     if key == 'declarations' or key == 'sign_in':
         stamp_state(ctx, key, evidence)
     commit_records(ctx, f'docs(release): {ctx.version} step {n} ✅ (operator)')
@@ -1101,17 +1138,19 @@ def cmd_done(ctx: Ctx, n: int, evidence: str) -> int:
 
 def stamp_state(ctx: Ctx, key: str, evidence: str) -> None:
     today = dt.date.today().isoformat()
-    lines = ctx.state_file.read_text().splitlines()
-    for i, line in enumerate(lines):
-        if not line.startswith('| ') or line.startswith('| Declaration') or line.startswith('|---'):
+    operator = ctx.cfg['app'].get('operator', 'operator')
+    lines, header, col = state_table(ctx)
+    for i in range(header + 2, len(lines)):
+        if not lines[i].startswith('| '):
+            break
+        c = split_row(lines[i])
+        name = c[col['Declaration']]
+        if key == 'sign_in' and name.startswith('Sign in details'):
+            c[col['Status']] = f'{DONE} set'
+        elif not (key == 'declarations' and name.split(' (')[0].lower() in evidence.lower()):
             continue
-        c = split_row(line)
-        if key == 'sign_in' and c[0].startswith('Sign in details'):
-            c[2], c[3] = f'{DONE} set', today
-        elif key == 'declarations' and c[0].split(' (')[0].lower() in evidence.lower():
-            c[3] = today
-        else:
-            continue
+        c[col['Last confirmed']] = today
+        c[col['Source']] = f'manual ({operator}, {today})'
         lines[i] = '| ' + ' | '.join(c) + ' |'
     ctx.state_file.write_text('\n'.join(lines) + '\n')
 
@@ -1221,6 +1260,94 @@ def cmd_promote(ctx: Ctx, to: str, fraction: float, go: bool) -> int:
     return 0
 
 
+LISTING_NEEDS = [  # what Play requires before a listing can be published (Play Console Help)
+    ('shortDescription', 'Short description (≤ 80 characters)'),
+    ('fullDescription', 'Full description (≤ 4,000 characters)'),
+]
+IMAGE_NEEDS = [('icon', 1, 'App icon, 512 × 512 PNG'), ('featureGraphic', 1, 'Feature graphic, 1024 × 500'),
+               ('phoneScreenshots', 2, 'At least 2 phone screenshots')]
+
+
+def readout_markdown(ctx: Ctx, r: dict) -> str:
+    today = dt.date.today().isoformat()
+    out = [f'Read through the Play Developer API on {today} (`release.py readout`). Source: api. '
+           'Read-only: the edit was deleted, never committed.', '', '**Tracks**', '',
+           '| Track | Releases |', '|---|---|']
+    for t in sorted(r['tracks'], key=lambda t: t['track']):
+        rel = '; '.join(f'{x.get("name")} — codes {", ".join(x.get("versionCodes", []))}, {x.get("status")}'
+                        + (f' at {x["userFraction"]:.0%}' if x.get('userFraction') else '')
+                        for x in t.get('releases', [])) or 'none'
+        out.append(f'| `{t["track"]}` | {rel} |')
+    d = r['details']
+    out += ['', '**App details**', '',
+            f'- Default language: {d.get("defaultLanguage") or "not set"}',
+            f'- Contact email: {d.get("contactEmail") or "**not set** (required)"}',
+            f'- Contact website: {d.get("contactWebsite") or "not set"}',
+            f'- Contact phone: {d.get("contactPhone") or "not set"}', '', '**Store listing**', '']
+    missing = []
+    if not d.get('contactEmail'):
+        missing.append('Contact email (App details)')
+    for l in r['listings']:
+        lang = l['language']
+        out.append(f'- `{lang}`: title "{l.get("title") or ""}"; short description '
+                   f'{len(l.get("shortDescription") or "")} chars; full description '
+                   f'{len(l.get("fullDescription") or "")} chars; video {"set" if l.get("video") else "none"}')
+        imgs = r['images'].get(lang, {})
+        out.append('  - images: ' + ', '.join(f'{k} {v}' for k, v in imgs.items()))
+        for field, label in LISTING_NEEDS:
+            if not l.get(field):
+                missing.append(f'{label} — `{lang}`')
+        for kind, need, label in IMAGE_NEEDS:
+            if imgs.get(kind, 0) < need:
+                missing.append(f'{label} — `{lang}` has {imgs.get(kind, 0)}')
+    if not r['listings']:
+        missing.append('A store listing in the default language')
+    out += ['', '**Missing before the listing can go live:** ' + ('none' if not missing else ''), '']
+    out += [f'- {m}' for m in missing]
+    out += ['', '**Subscriptions**', '', '| Product | Base plan | State | Billing period | Regions |',
+            '|---|---|---|---|---|']
+    for s in r['subscriptions']:
+        for b in s.get('basePlans', []):
+            period = (b.get('autoRenewingBasePlanType') or {}).get('billingPeriodDuration', '—')
+            flag = ''
+            if 'yearly' in b.get('basePlanId', '') and period != 'P1Y':
+                flag = ' ⚠ **not yearly**'
+            if 'monthly' in b.get('basePlanId', '') and period != 'P1M':
+                flag = ' ⚠ **not monthly**'
+            out.append(f'| `{s["productId"]}` | `{b["basePlanId"]}` | {b.get("state")} | {period}{flag} | '
+                       f'{len(b.get("regionalConfigs") or [])} |')
+    return '\n'.join(out)
+
+
+def cmd_readout(ctx: Ctx) -> int:
+    import play_api
+    path = ctx.local_value('play_service_account_json')
+    try:
+        if not path:
+            raise Stop('No service account', '`play_service_account_json` is empty.', 'Do step 2 first.')
+        r = play_api.PlayClient(os.path.expanduser(path), ctx.cfg['app']['package']).readout()
+    except Stop as s:
+        print(f'⛔ {s.what}\nWhy: {s.why}\nFix: {s.fix}')
+        return 1
+    body = readout_markdown(ctx, r)
+    text = ctx.state_file.read_text()
+    header = '## Play readout'
+    if header in text:
+        start = text.index(header)
+        nxt = text.find('\n## ', start + len(header))
+        text = text[:start] + f'{header}\n\n{body}\n' + (text[nxt:] if nxt != -1 else '')
+    else:
+        text = text.rstrip() + f'\n\n{header}\n\n{body}\n'
+    ctx.state_file.write_text(text)
+    if ctx.tracker.exists():
+        t = Tracker(ctx)
+        t.log(f'Play readout recorded in {ctx.state_file.name} § Play readout (api)')
+        t.save()
+    commit_records(ctx, f'docs(release): Play readout {dt.date.today().isoformat()}')
+    print(body)
+    return 0
+
+
 def cmd_gate(ctx: Ctx, which: str) -> int:
     try:
         require_worktree(ctx)
@@ -1259,6 +1386,7 @@ def main() -> int:
     pr.add_argument('--to', required=True)
     pr.add_argument('--fraction', type=float, required=True)
     pr.add_argument('--go', action='store_true')
+    sub.add_parser('readout').add_argument('version')
     g = sub.add_parser('gate')
     g.add_argument('version')
     g.add_argument('which', choices=['policy', 'priv1', 'sdk'])
@@ -1290,6 +1418,8 @@ def main() -> int:
         return cmd_promote(ctx, args.to, args.fraction, args.go)
     if args.cmd == 'gate':
         return cmd_gate(ctx, args.which)
+    if args.cmd == 'readout':
+        return cmd_readout(ctx)
     return 2
 
 

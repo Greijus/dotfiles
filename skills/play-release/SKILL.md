@@ -41,6 +41,12 @@ A new app needs a `release.config.yaml` (copy PRAY's and change the values), a
 | `ack <v> <package> "<why>"` | accepts a new direct dependency for the SDK gate |
 | `promote <v> --to <track> --fraction <0–1> --go` | moves the uploaded build between tracks |
 | `gate <v> policy\|priv1\|sdk [--worktree DIR]` | runs one gate without touching the tracker |
+| `readout <v>` | reads tracks, app details, store listing + image counts, and subscriptions from Play (read-only: the edit is deleted) into `play-console-state.md` § Play readout, with what the listing still lacks |
+
+**Source column.** Every tracker row and every state row says where its evidence came from:
+`api`, `gh`, `repo`, `repo + site`, `gcloud`, or `manual (<operator>, <date>)`. **Never mark ✅
+what was not verified that way.** A fact the operator reported but no tool confirmed is
+◐ "reported", with the check that would verify it.
 
 **Long steps** (the tests take ~20 min, the build ~7) run inside `run`. Start it with the Bash
 tool's `run_in_background`, wait for the completion notice, then show the result. Never poll.

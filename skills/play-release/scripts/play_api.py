@@ -93,6 +93,28 @@ class PlayClient:
         """Opens and deletes an empty edit: proves the account can reach this app, changes nothing."""
         self._delete(self._edit())
 
+    IMAGE_TYPES = ('icon', 'featureGraphic', 'phoneScreenshots', 'sevenInchScreenshots',
+                   'tenInchScreenshots', 'tvBanner', 'tvScreenshots', 'wearScreenshots')
+
+    def readout(self) -> dict:
+        """Reads what Play holds for this app. Read-only: the edit is deleted, never committed."""
+        edit = self._edit()
+        base = f'{API}/{self.package}/edits/{edit}'
+        try:
+            out = {'details': self._call('GET', f'{base}/details'),
+                   'tracks': self._call('GET', f'{base}/tracks').get('tracks', []),
+                   'listings': self._call('GET', f'{base}/listings').get('listings', []),
+                   'images': {}}
+            for listing in out['listings']:
+                lang = listing['language']
+                out['images'][lang] = {
+                    kind: len(self._call('GET', f'{base}/listings/{lang}/{kind}').get('images', []))
+                    for kind in self.IMAGE_TYPES}
+        finally:
+            self._delete(edit)
+        out['subscriptions'] = self._call('GET', f'{API}/{self.package}/subscriptions').get('subscriptions', [])
+        return out
+
     def _track(self, edit: str, track: str) -> dict:
         return self._call('GET', f'{API}/{self.package}/edits/{edit}/tracks/{track}')
 
