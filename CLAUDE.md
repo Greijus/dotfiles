@@ -51,6 +51,22 @@ Full rules, examples, and the anti-patterns → `operator-surveys` skill.
 
 ---
 
+## How To Point Me At Files
+
+I read replies in the VS Code panel and want to open what you mention with one click.
+
+- **Every** file or doc named in a reply is a markdown link, never a bare name or a backtick
+  span: [play-console-state.md](docs/releases/play-console-state.md), not
+  `play-console-state.md`. A specific line is a line anchor:
+  [release.py:120](scripts/release.py#L120).
+- Paths are **relative to the workspace root**. A file outside the workspace (another repo,
+  `~/.config`) gets its absolute path: [SKILL.md](/home/jorge/Projects/dotfiles/skills/play-release/SKILL.md).
+- No backticks around a link. Backticks stay for code, commands, branch names, shas and
+  identifiers that are not files.
+- This is for replies to me. Inside files you write, follow that file's own link style.
+
+---
+
 ## Current Stack
 
 - **Mobile:** Flutter (Dart), Android via physical device → `flutter-mvp` skill
