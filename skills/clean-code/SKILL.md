@@ -109,23 +109,47 @@ A careless fix relocates a defect instead of closing it. On pray-app, *every* de
 
 CI gates every merge to `main` (already required — see CLAUDE.md's "What NOT to Do"). CD stays manual until real users exist (`COMPANY.md`).
 
-Minimal GitHub Actions workflow — lint + test, nothing else, until a real signal demands more:
+Minimal GitHub Actions workflow — lint + test, nothing else, until a real signal demands more. Its few extra lines are the cheap defaults below; each one was paid for in runner minutes on pray-app:
 
 ```yaml
 # .github/workflows/ci.yml
 name: CI
-on: [pull_request, push]
+on:
+  push:
+    # Only what CI checks. Keep docs/plans, trackers and READMEs out — but keep any doc a test reads.
+    paths: ['lib/**', 'test/**', 'assets/**', 'android/**', 'pubspec.*', 'analysis_options.yaml', '.github/workflows/**']
+  workflow_dispatch:            # "Run workflow": everything, on demand
+concurrency:                    # a newer push supersedes the run still going
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30         # ~2× a green run; a dead runner otherwise holds the job for hours
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
       - run: flutter analyze
-      - run: flutter test
+      - run: flutter test -j "$(nproc)"   # the default is half the cores: one file at a time on a 2-core runner
 ```
 
-Swap the two `flutter` steps for the stack's equivalent (`npm run lint` / `npm test`) on non-Flutter projects.
+Swap the two `flutter` steps for the stack's equivalent on non-Flutter projects (`npm run lint` / `npm test`, `ruff` / `pytest`), and set the same concurrency there: Jest `--maxWorkers="$(nproc)"`, pytest-xdist `-n auto`, Gradle `maxParallelForks = Runtime.getRuntime().availableProcessors()`.
+
+**The defaults, and why** (pray-app, October 2026 — 52 push runs, ~830 runner-minutes over two weeks):
+
+- **Run for changes CI checks, not for every push.** 29 of the 52 runs (51% of the minutes) were pushes that changed only plans and release trackers, and with `cancel-in-progress` each one cancelled the code run before it. `on.push.paths` stops both. List what CI reads: the source, the tests, the build files, the workflow, *and any doc a test opens*. Then **enforce the list with a test**: a lint test reads `on.push.paths` from the workflow and fails on any read outside it (pray-app `mobile/test/lint/ci_paths_test.dart`), so the list cannot go stale silently. Caveat: if branch protection *requires* this check, a path-skipped push leaves it pending forever. Either don't require it or add a trivial always-run job with the same name.
+- **One trigger per commit.** `on: [pull_request, push]` runs every PR commit twice. A solo repo with no PRs needs `push` only. A PR repo uses `pull_request` plus `push: branches: [main]`.
+- **Anything that gates on "CI green at commit X" must accept a skipped commit.** A docs-only commit gets no run, and a push of several commits runs only at its tip. The check takes the newest run on X's first-parent history, provided nothing under `paths` changed since (play-release `ci_run_for`).
+- **Concurrency is the suite's lever, not test selection.** On pray-app no file took more than 11 s of an 8-minute suite. Running files on every core cut it to 5–7 min. Running only "the tests near the change" is not offered: there is no reliable impact analysis, and shared code breaks far from the edit.
+
+**When the job grows a heavy build step** (an Android APK/AAB, a Docker image, a web bundle):
+
+- **Run it only when its own inputs changed.** Analyze and the tests already compile the code. A debug APK adds proof only for Gradle, the manifest and native plugins, so build it when `android/`, `pubspec.*`, the version file or the workflow changed. Also build it when the push base can't be diffed (a new branch, a force-push) or on a manual run. Diff `github.event.before..github.sha` after `checkout` with `fetch-depth: 0`. The release build proves the full build anyway before anything ships.
+- **Android on hosted runners: free the disk first.** The NDK and CMake install on every run, on a disk the test run has nearly filled. pray-app's last green build ended with **38 MB** free, and every build after it killed its runner. A runner that dies leaves **no log** and holds the job until something cancels it (2 h 18 min once). Before the build:
+  `sudo rm -rf /usr/share/dotnet /usr/local/.ghcup /opt/ghc /usr/share/swift /usr/local/share/boost /opt/hostedtoolcache/CodeQL` (took 9.4 → 24 GB free). Print `df -h /` before and after, so the next squeeze shows in the log.
+- **Gate it to the branches that ship** (`main`, `rc/*`); lane branches gate on the suite.
+
+A full worked example of all of the above: pray-app `.github/workflows/ci.yml` (round 19).
 
 ## Not covered here
 
