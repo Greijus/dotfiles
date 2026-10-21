@@ -93,12 +93,12 @@ details. 22 promote, **on go**. 23 send for review / publish, **on go**. 24 clos
 
 ## Parallel work
 
-- **The release worktree:** `.claude/worktrees/release-<v>` on `rc/<v>`. Development carries on in the main checkout, on the **next** branch.
-- **If `rc/<v>` is checked out anywhere else, step 3 stops and names where.** Release work owns the RC branch. Move the other checkout to the next branch first.
+- **The release worktree:** `.claude/worktrees/release-<v>`. If `rc/<v>` is free it is checked out there. If your folder has `rc/<v>` open, the worktree is a **detached copy of its tip** and your folder stays where it is. Move it to the next `rc/` **only if you are developing** during the release (operator, 2026-10-21).
+- **The branch must not move under the release.** Before the cut, the build and the push, the runner stops if `rc/<v>` gained commits the release does not have. Picked commits count as had. The push is fast-forward only. In detached mode, step 16 ends by telling you to `git merge --ff-only origin/rc/<v>` in your folder; it never moves your branch itself.
 - **Fixes:** they reach the release only through `cherry-pick`. It never merges or rebases. Each pick is recorded in § Cherry-picks, and every code step after it reopens.
 - **A dirty worktree stops the step**, listing every dirty file.
 - **Gitignored build files** (`build.local_files`, e.g. `key.properties`) are symlinked from the main checkout, never copied.
-- **Tracker commits:** only the tracker and the state file, as `docs(release): …` in the main checkout. They are never pushed by the runner.
+- **Tracker commits:** only the tracker and the state file, as `docs(release): …` in the main checkout. There is **one commit per command** (`run`, `done`, `cut`, …), not one per step, although the file itself is written at every status change. They are never pushed by the runner.
 
 ## Rules
 

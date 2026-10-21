@@ -320,6 +320,36 @@ def require_clean(ctx: Ctx) -> None:
                    'a release except through a commit.')
 
 
+def detached(ctx: Ctx) -> bool:
+    """Whether the release worktree is a detached copy (the RC is open in the operator's folder)."""
+    return subprocess.run(['git', '-C', str(ctx.wt()), 'symbolic-ref', '-q', 'HEAD'],
+                          capture_output=True).returncode != 0
+
+
+def release_unmoved(ctx: Ctx) -> None:
+    """In detached mode: stop if `rc/<v>` gained commits the release does not have.
+
+    Commits already brought in by `cherry-pick` count as had (`git cherry` compares patches).
+    """
+    if not detached(ctx):
+        return
+    git(ctx.repo, 'fetch', 'origin', ctx.rc, check=False)
+    missing = []
+    for ref in (f'refs/heads/{ctx.rc}', f'refs/remotes/origin/{ctx.rc}'):
+        if not git(ctx.repo, 'rev-parse', '--verify', '--quiet', ref, check=False):
+            continue
+        for line in git(ctx.wt(), 'cherry', 'HEAD', ref).splitlines():
+            if line.startswith('+ '):
+                missing.append(line[2:10])
+    if missing:
+        subjects = '\n'.join('  ' + git(ctx.repo, 'log', '-1', '--format=%h %s', sha) for sha in sorted(set(missing)))
+        raise Stop(f'`{ctx.rc}` moved during the release', 'Commits on the branch that the release does not have:\n'
+                   + subjects,
+                   f'If they belong in {ctx.version}: `release.py cherry-pick {ctx.version} <sha>…`. If they are '
+                   f'next-round work, they should not be on {ctx.rc}: move them to the next rc/ branch first '
+                   '(ask the operator before resetting anything).')
+
+
 def baseline_ref(ctx: Ctx) -> str:
     """The last release: the newest `v*` tag reachable from the RC, else the previous marker."""
     tags = git(ctx.wt(), 'tag', '--merged', 'HEAD', '--sort=-creatordate', '--list', 'v*', check=False)
@@ -579,11 +609,14 @@ def step_worktree(ctx: Ctx, t: Tracker) -> str:
         lines = dict(line.split(' ', 1) for line in block.splitlines() if ' ' in line)
         if lines.get('branch') == f'refs/heads/{ctx.rc}':
             holder = Path(lines['worktree'])
-    if holder and holder.resolve() != wt.resolve():
-        raise Stop(f'`{ctx.rc}` is checked out elsewhere', f'{holder} has {ctx.rc} checked out, and a branch can '
-                   'live in one worktree only. Release work owns the RC branch.',
-                   f'Move that checkout to the next development branch (e.g. the next rc/), then run again.')
-    if not holder:
+    if (wt / '.git').exists():
+        pass                                           # resumed: attached or detached, as created
+    elif holder and holder.resolve() != wt.resolve():
+        # The operator's folder has the RC open (operator, 2026-10-21: move to the next rc/ only
+        # when developing). Build from a detached copy of its tip; release_unmoved() guards the
+        # branch from here on, and the push stays fast-forward only.
+        git(ctx.repo, 'worktree', 'add', '--detach', str(wt), ctx.rc)
+    elif not holder:
         git(ctx.repo, 'fetch', 'origin', ctx.rc, check=False)
         exists = git(ctx.repo, 'rev-parse', '--verify', '--quiet', f'refs/heads/{ctx.rc}', check=False)
         if not exists:
@@ -607,7 +640,8 @@ def step_worktree(ctx: Ctx, t: Tracker) -> str:
             target.symlink_to(source)
         linked.append(Path(rel).name)
     require_clean(ctx)
-    return f'{os.path.relpath(wt, ctx.repo)} on {ctx.rc} @ {head(ctx)}, clean; linked: {", ".join(linked) or "none"}'
+    mode = f'detached copy of {ctx.rc} (open in {holder})' if detached(ctx) else f'on {ctx.rc}'
+    return f'{os.path.relpath(wt, ctx.repo)} {mode} @ {head(ctx)}, clean; linked: {", ".join(linked) or "none"}'
 
 
 def step_fixes(ctx: Ctx, t: Tracker) -> str:
@@ -726,6 +760,7 @@ Say "cut {ctx.version}" to make the marker (it changes VERSION only), or name fi
 def do_cut(ctx: Ctx) -> str:
     require_worktree(ctx)
     require_clean(ctx)
+    release_unmoved(ctx)
     if marker_sha(ctx):
         return marker_sha(ctx)
     vf = ctx.wt(ctx.cfg['app']['version_file'])
@@ -809,6 +844,7 @@ def step_gate_secrets(ctx: Ctx, t: Tracker) -> str:
 def step_build(ctx: Ctx, t: Tracker) -> str:
     require_worktree(ctx)
     require_clean(ctx)
+    release_unmoved(ctx)
     h = ctx.local_value('reviewer_code_sha256')
     b = ctx.cfg['build']
     aab = ctx.wt(b['aab'])
@@ -866,11 +902,16 @@ def step_tag_push(ctx: Ctx, t: Tracker) -> str:
     if existing and not existing.startswith(sha):
         raise Stop(f'{ctx.tag} already exists elsewhere', f'{ctx.tag} points at {existing[:8]}, not {sha}.',
                    'A published version is never moved. Use a new version.')
+    release_unmoved(ctx)
     if not existing:
         git(ctx.wt(), 'tag', '-a', ctx.tag, '-m', f'Release {ctx.version}', sha)
-    git(ctx.wt(), 'push', 'origin', f'HEAD:refs/heads/{ctx.rc}')
+    git(ctx.wt(), 'push', 'origin', f'HEAD:refs/heads/{ctx.rc}')   # fast-forward only: never forced
     git(ctx.wt(), 'push', 'origin', f'refs/tags/{ctx.tag}')
-    return f'{ctx.tag} → {sha}; {ctx.rc} and tag pushed'
+    note = ''
+    if detached(ctx):
+        # The local branch is open in the operator's folder: never move it under them.
+        note = (f'; your folder on {ctx.rc} is behind origin — run `git merge --ff-only origin/{ctx.rc}` there')
+    return f'{ctx.tag} → {sha}; {ctx.rc} and tag pushed{note}'
 
 
 def step_upload(ctx: Ctx, t: Tracker) -> str:
@@ -1124,8 +1165,10 @@ def cmd_run(ctx: Ctx) -> int:
             message = f'⛔ Step {n} — {s.what}\nWhy: {s.why}\nFix: {s.fix}'
             break
         t.set(n, DONE, evidence)
-        commit_records(ctx, f'docs(release): {ctx.version} step {n} ✅')
-    commit_records(ctx, f'docs(release): {ctx.version} tracker')
+    # One commit per command (operator, 2026-10-21): the file is written at every status
+    # change, but a release should cost ~10 commits, not one per step.
+    done_now = [str(i) for i in range(1, len(STEPS) + 1) if t.status(i) == DONE]
+    commit_records(ctx, f'docs(release): {ctx.version} — steps ✅ through {done_now[-1] if done_now else "none"}')
     show(t, message)
     return 0
 
