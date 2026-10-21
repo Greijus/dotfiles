@@ -89,9 +89,11 @@ instead of colliding — but waiting is still the morning gone. Spend the budget
 - **Your gate on the integrated tree is the one that counts**, and you land lanes serially
   anyway — so lane gates are pre-checks, and the `-j` cap is the machine's, not yours to raise.
 - **The lane's full-suite gate runs on CI, not the laptop.** Where the project runs the suite
-  on every push (pray-app does, and its runner beats the laptop 2× on the suite alone), the
-  lane's brief says: push the lane branch, then `gh run watch` the run it starts, in the
-  foreground, and report its verdict. The laptop never runs a lane's full suite. Only the
+  on every push that changes code (pray-app does, and its runner beats the laptop 2× on the
+  suite alone), the lane's brief says: push the lane branch, then `gh run watch` the run it
+  starts, in the foreground, and report its verdict. pray-app's CI filters `on.push.paths`
+  (round 19), so a lane push that changes only docs starts no run — there is nothing to gate,
+  and the brief says so rather than waiting. The laptop never runs a lane's full suite. Only the
   integrator's gate on the rebased tree stays local, under the slot budget, and the pushed RC's
   own run backstops it. Landing deletes the remote lane branch too
   (`git push origin --delete feat/lane-<name>`).
