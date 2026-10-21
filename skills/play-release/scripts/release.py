@@ -630,12 +630,25 @@ def step_format_l10n(ctx: Ctx, t: Tracker) -> str:
     require_clean(ctx)
     m = ctx.mobile()
     testlock(ctx, 'format', ['dart', 'format', '--output=none', '--set-exit-if-changed', '.'], m)
-    for cmd in ctx.cfg['l10n'].get('regenerate', []):
-        testlock(ctx, 'l10n', cmd, m)
+    # A fresh worktree has no build/; gen-l10n writes its untranslated report there and fails.
+    (m / 'build').mkdir(exist_ok=True)
+    try:
+        for cmd in ctx.cfg['l10n'].get('regenerate', []):
+            testlock(ctx, 'l10n', cmd, m)
+        # Generators write unformatted Dart; the committed copies are formatted (CI checks it).
+        paths = ctx.cfg['l10n'].get('format_after', [])
+        if paths:
+            testlock(ctx, 'l10n-format', ['dart', 'format', *paths], m)
+    except Stop:
+        # Never leave a half-regenerated tree behind: every later step needs it clean.
+        git(ctx.wt(), 'checkout', '--', '.')
+        raise
     dirty = git(ctx.wt(), 'status', '--porcelain')
     if dirty:
+        git(ctx.wt(), 'checkout', '--', '.')
         raise Stop('Regeneration changed files', 'Committed generated files are stale:\n' + dirty,
-                   'Regenerate on a fix branch, commit, cherry-pick it here (`release.py cherry-pick`).')
+                   'Regenerate on a fix branch, commit, cherry-pick it here (`release.py cherry-pick`). '
+                   'The worktree was restored.')
     return f'format clean, l10n + pseudo-locale unchanged @ {head(ctx)}'
 
 
