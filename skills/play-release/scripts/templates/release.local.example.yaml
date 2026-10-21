@@ -1,0 +1,14 @@
+# release.local.yaml — secrets for play-release. GITIGNORED: never commit, never paste into chat.
+# Lives at the app repo's root, beside release.config.yaml.
+
+# SHA-256 (lower-case hex) of the Google Play reviewer code. Make it with:
+#   printf %s 'THE-CODE' | sha256sum | cut -d' ' -f1
+# Use a long random code (16+ characters): the hash ships in the app.
+reviewer_code_sha256:
+
+# The plain reviewer code, kept here as a COMMENT only (the scripts never read it), so you can
+# paste it into Play Console › App access:
+# reviewer_code:
+
+# PATH to the Play Developer API service-account key (JSON), stored outside every repo.
+play_service_account_json:
