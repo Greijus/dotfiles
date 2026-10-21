@@ -711,20 +711,61 @@ def step_ci(ctx: Ctx, t: Tracker) -> str:
     remote = git(ctx.repo, 'ls-remote', 'origin', f'refs/heads/{ctx.rc}').split()
     if not remote or remote[0] != sha:
         git(ctx.wt(), 'push', 'origin', f'HEAD:refs/heads/{ctx.rc}')
-    runs = json.loads(sh(['gh', 'run', 'list', '--repo', ctx.cfg['app']['github_repo'], '--commit', sha,
-                          '--json', 'status,conclusion,workflowName,url', '--limit', '20']))
     wanted = ctx.cfg['gates']['ci_workflows']
+    tested = []
     for name in wanted:
-        hits = [r for r in runs if r['workflowName'] == name]
-        if not hits:
-            raise Wait(f'CI has not started for {sha[:8]} ({name}). Run again in a few minutes.')
-        r = hits[0]
+        ran_at, r = ci_run_for(ctx, name, sha)
         if r['status'] != 'completed':
-            raise Wait(f'CI is {r["status"]} for {sha[:8]} ({name}): {r["url"]}. Run again when it finishes.')
+            raise Wait(f'CI is {r["status"]} for {ran_at[:8]} ({name}): {r["url"]}. Run again when it finishes.')
         if r['conclusion'] != 'success':
-            raise Stop(f'CI {r["conclusion"]} at {sha[:8]}', f'{name}: {r["url"]}',
+            raise Stop(f'CI {r["conclusion"]} at {ran_at[:8]}', f'{name}: {r["url"]}',
                        'Read the failing job, fix on a fix branch, cherry-pick, and run again.')
-    return f'{", ".join(wanted)} green @ {sha[:8]}'
+        tested.append(ran_at)
+    if all(s == sha for s in tested):
+        return f'{", ".join(wanted)} green @ {sha[:8]}'
+    return (f'{", ".join(wanted)} green @ {", ".join(sorted({s[:8] for s in tested}))}; '
+            f'nothing CI runs for changed up to {sha[:8]}')
+
+
+def ci_push_paths(ctx: Ctx, name: str) -> list[str] | None:
+    """The workflow's `on.push.paths`, or None when every push runs it."""
+    for f in sorted(ctx.wt('.github/workflows').glob('*.y*ml')):
+        wf = yaml.safe_load(f.read_text()) or {}
+        if wf.get('name') != name:
+            continue
+        on = wf.get('on', wf.get(True))  # PyYAML reads a bare `on:` key as the boolean True
+        push = on.get('push') if isinstance(on, dict) else None
+        return push.get('paths') if isinstance(push, dict) else None
+    return None
+
+
+def ci_run_for(ctx: Ctx, name: str, sha: str) -> tuple[str, dict]:
+    """The run that tested `sha`'s code, as (the commit it ran at, the run).
+
+    A workflow filtered by `on.push.paths` does not run for a push that changes none of them
+    (a tracker commit, a plan doc), and a push of several commits runs only at its tip. So the
+    run that counts is the newest one on `sha`'s first-parent history, provided nothing under
+    those paths changed between the commit it ran at and `sha`.
+    """
+    runs = json.loads(sh(['gh', 'run', 'list', '--repo', ctx.cfg['app']['github_repo'], '--workflow', name,
+                          '--json', 'headSha,status,conclusion,url', '--limit', '100']))
+    newest = {}
+    for r in runs:  # gh lists newest first
+        newest.setdefault(r['headSha'], r)
+    paths = ci_push_paths(ctx, name)
+    history = git(ctx.wt(), 'rev-list', '--first-parent', '--max-count=50', sha).split() if paths else [sha]
+    for commit in history:
+        if commit not in newest:
+            continue
+        if commit != sha:
+            changed = git(ctx.wt(), 'diff', '--name-only', commit, sha, '--',
+                          *[f':(glob){p}' for p in paths])
+            if changed:
+                raise Wait(f'CI has not run for {sha[:8]} ({name}) yet: since its last run at {commit[:8]} '
+                           f'it changed {len(changed.splitlines())} file(s) CI runs for. '
+                           'Run again in a few minutes.')
+        return commit, newest[commit]
+    raise Wait(f'CI has not started for {sha[:8]} ({name}). Run again in a few minutes.')
 
 
 def step_gate_policy(ctx: Ctx, t: Tracker) -> str:

@@ -70,7 +70,9 @@ tool's `run_in_background`, wait for the completion notice, then show the result
 
 1–4 setup: preflight · Play API service account (once per app; auto-✅ once it works) ·
 release worktree · fixes to cherry-pick. 5–8 verify: `dart format` + l10n regenerated
-with no diff · `flutter analyze` · full `flutter test` · CI green at that commit. 9–11
+with no diff · `flutter analyze` · full `flutter test` · CI green at that commit — or, when the
+workflow filters `on.push.paths`, at the newest earlier commit with nothing under those paths
+changed since (a docs-only commit gets no run of its own). 9–11
 privacy gates. 12 the cut, **on go**. 13 changelog + release notes. 14 secrets gate. 15
 signed AAB, verified. 16 tag and push. 17 upload to the internal track. 18–21 operator checks:
 the phone on the Play-installed build · Firebase · declarations flagged for re-check · Sign in
