@@ -96,6 +96,7 @@ details. 22 promote, **on go**. 23 send for review / publish, **on go**. 24 clos
 ## Parallel work
 
 - **The release worktree:** `.claude/worktrees/release-<v>`. If `rc/<v>` is free it is checked out there. If your folder has `rc/<v>` open, the worktree is a **detached copy of its tip** and your folder stays where it is. Move it to the next `rc/` **only if you are developing** during the release (operator, 2026-10-21).
+- ⚠️ **Detached mode is broken (found 2026-10-23, pray-app 1.0b19):** the runner's tracker commits go onto `rc/<v>` in your folder, while the cut and the build go onto the detached copy. The two lines diverge at the cut, and the branch-moved guard counts the tracker's own docs commits. **Until it is redesigned, before `run`: move your folder to the next `rc/` branch, so the worktree checks out `rc/<v>` itself.** That is the arrangement that shipped 1.0b18. Afterwards, rebase the next `rc/` branch onto the `Version <v>` marker.
 - **The branch must not move under the release.** Before the cut, the build and the push, the runner stops if `rc/<v>` gained commits the release does not have. Picked commits count as had. The push is fast-forward only. In detached mode, step 16 ends by telling you to `git merge --ff-only origin/rc/<v>` in your folder; it never moves your branch itself.
 - **Fixes:** they reach the release only through `cherry-pick`. It never merges or rebases. Each pick is recorded in § Cherry-picks, and every code step after it reopens.
 - **A dirty worktree stops the step**, listing every dirty file.
