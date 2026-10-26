@@ -140,9 +140,9 @@ remediation does not end at the re-score — it leaves the score defended:
   audited paths have churned past the `gates.audit` limits since `last_audit_sha` — until a
   re-audit lands. When a remediation closes with its *measured after* column, move
   `last_audit_sha` to the re-measured commit in the same change.
-- **The delta review is the orchestrator's per-landing `/code-review`, added up.** Each lane
-  already lands reviewed; the review at the cut covers the whole range and whatever landed
-  outside a lane.
+- **The delta review covers the whole range** `<previous marker>..HEAD`, not a sum of lane
+  reviews: the orchestrator's per-landing `/code-review` catches a lane's own defects, the cut
+  review catches what landed outside a lane and what only the combination shows.
 - A re-audit is a procedure you run when the gate says so, not a hope.
 
 ## 11. Defer decisions, don't guess them
