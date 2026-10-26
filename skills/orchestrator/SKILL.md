@@ -88,6 +88,10 @@ instead of colliding — but waiting is still the morning gone. Spend the budget
   the slot line in every brief so the lane expects to wait.
 - **Your gate on the integrated tree is the one that counts**, and you land lanes serially
   anyway — so lane gates are pre-checks, and the `-j` cap is the machine's, not yours to raise.
+- **Before the round's push, run every step the CI workflow runs, not just the suite.** Tests a
+  project skips by default (pray-app's tagged `research` harnesses) and the build proofs run only
+  in CI, so no lane gate sees them: *pray-app round 20 — a lane's locator change broke a research
+  probe that 14 green lane gates never ran; the local run of the workflow's steps caught it.*
 - **The lane's full-suite gate runs on CI, not the laptop.** Where the project runs the suite
   on every push that changes code (pray-app does, and its runner beats the laptop 2× on the
   suite alone), the lane's brief says: push the lane branch, then `gh run watch` the run it
