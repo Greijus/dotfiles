@@ -36,11 +36,12 @@ A new app needs a `release.config.yaml` (copy PRAY's and change the values), a
 | `status <v>` | creates the tracker if missing; prints the table |
 | `run <v>` | runs from the first open step until a manual step, a go, or a failure |
 | `done <v> <step> "<evidence>"` | records a **manual** step; evidence is a date, count, sha or path, never "done" |
-| `cut <v> --go` | makes the `Version <v>` marker (VERSION only), after gates 9–11 are ✅ |
+| `cut <v> --go` | makes the `Version <v>` marker (VERSION only), after gates 9–11 are ✅ and the audit gate passes |
 | `cherry-pick <v> <sha>…` | brings a fix into the release; reopens every code step after it |
 | `ack <v> <package> "<why>"` | accepts a new direct dependency for the SDK gate |
+| `review <v> "<evidence>"` | records the delta review of the code at HEAD in § Delta review, for the audit gate. Evidence is what the review did and what came of it: `/code-review high v1.0b19..HEAD: 6 findings, 5 fixed (<shas>), 1 recorded in open-items` |
 | `promote <v> --to <track> --fraction <0–1> --go` | moves the uploaded build between tracks |
-| `gate <v> policy\|priv1\|sdk [--worktree DIR]` | runs one gate without touching the tracker |
+| `gate <v> policy\|priv1\|sdk\|audit [--worktree DIR]` | runs one gate without touching the tracker |
 | `readout <v>` | reads tracks, app details, store listing + image counts, and subscriptions from Play (read-only: the edit is deleted) into `play-console-state.md` § Play readout, with what the listing still lacks |
 
 **Source column.** Every tracker row and every state row says where its evidence came from:
@@ -72,11 +73,11 @@ tool's `run_in_background`, wait for the completion notice, then show the result
 release worktree · fixes to cherry-pick. 5–8 verify: `dart format` + l10n regenerated
 with no diff · `flutter analyze` · full `flutter test` · CI green at that commit — or, when the
 workflow filters `on.push.paths`, at the newest earlier commit with nothing under those paths
-changed since (a docs-only commit gets no run of its own). 9–11
-privacy gates. 12 the cut, **on go**. 13 changelog + release notes. 14 secrets gate. 15
-signed AAB, verified. 16 tag and push. 17 upload to the internal track. 18–21 operator checks:
-the phone on the Play-installed build · Firebase · declarations flagged for re-check · Sign in
-details. 22 promote, **on go**. 23 send for review / publish, **on go**. 24 close.
+changed since (a docs-only commit gets no run of its own). 9–11 privacy gates. 12 the cut,
+**on go**, refused until the audit gate passes. 13 changelog + release notes. 14 secrets gate.
+15 signed AAB, verified. 16 tag and push. 17 upload to the internal track. 18–21 operator
+checks: the phone on the Play-installed build · Firebase · declarations flagged for re-check ·
+Sign in details. 22 promote, **on go**. 23 send for review / publish, **on go**. 24 close.
 
 ## Gates (each blocks with what failed, why, and the fix)
 
@@ -85,6 +86,10 @@ details. 22 promote, **on go**. 23 send for review / publish, **on go**. 24 clos
   - the deployed page equals the site repo.
   Both are compared as normalised word streams, so Markdown versus HTML and curly versus straight quotes don't count as differences.
 - **PRIV-1:** the `request.*` fields the prompt builder reads must equal the `priv1` block in `play-console-state.md`, and every phrase must appear in the policy. A new field stops the release: update both policy copies and Data safety, and do the consent re-ask.
+- **Audit** (`gates.audit`; skipped as "not configured" without it), checked at step 12 before VERSION is written:
+  - *cadence:* commits and lines changed (insertions + deletions) under `paths` since `last_audit_sha`, on the RC's history. Past `max_commits` or `max_lines_changed`, the cut stops until a scored re-audit (`code-audit`) lands its remediation and `last_audit_sha` moves to the re-measured commit;
+  - *delta review:* § Delta review must name HEAD, or a commit with nothing under `paths` changed since. Review `<last release>..HEAD` (built-in `/code-review` at high effort, or a fresh agent against the `clean-code` rubric), fix or record every finding, then `review`.
+  *Why:* pray-app went 643 commits from `1.0b11` to `1.0b19` with no audit between. Every rule the first audit had made a test held; every rule left as prose decayed, and the score fell 4.7 → 4.0.
 - **SDK:** no package matching `gates.sdk.deny` anywhere in `pubspec.lock`. Every new direct dependency since the last release needs an `ack`.
 - **Secrets:** the reviewer hash comes from `release.local.yaml`, is never printed, and must agree with `cross_check_files`. The Gradle debug-token guard must be present, and no debug token may be in the environment.
 - **AAB:**
@@ -110,4 +115,5 @@ details. 22 promote, **on go**. 23 send for review / publish, **on go**. 24 clos
 - **On failure:** say what failed, why, and the fix, then stop. Never guess and continue.
 - **Chat stays short:** the current step plus the table. Details go in the tracker.
 - One command per Bash call. Flutter and dart runs go through `testlock` (the runner does this itself).
-- The `Version` marker follows `beta-versioning`: VERSION only, and only on go. The runner's privacy gates are that skill's privacy gate.
+- The `Version` marker follows `beta-versioning`: VERSION only, and only on go. The runner's privacy gates are that skill's privacy gate; its audit gate is that skill's audit gate.
+- **Never edit § Delta review by hand, and never move `last_audit_sha` without the re-audit.** Each is the only proof its half of the audit gate has.

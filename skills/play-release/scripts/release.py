@@ -10,11 +10,13 @@ truth: every status change is written there first, then printed.
     release.py run     <version>                 run from the first open step until a manual step,
                                                  a gate that fails, or a step that needs your go
     release.py done    <version> <step> <evidence>   record a manual step as done
-    release.py cut     <version> --go            make the Version marker (step 12)
+    release.py cut     <version> --go            make the Version marker (step 12), once the audit
+                                                 gate passes
+    release.py review  <version> <evidence>      record the delta review of the code at HEAD (step 12)
     release.py cherry-pick <version> <sha>...    bring a fix into the release worktree
     release.py ack     <version> <package> <why> accept a new direct dependency (step 11)
     release.py promote <version> --to <track> --fraction <0-1> --go
-    release.py gate    <version> <policy|priv1|sdk>   run one gate against the release worktree,
+    release.py gate    <version> <policy|priv1|sdk|audit>   run one gate against the release worktree,
                                                  without touching the tracker
     release.py readout <version>                 read tracks, listing, images and subscriptions
                                                  from Play (read-only) into the state file
@@ -59,7 +61,8 @@ STEPS = [
     ('gate_policy', 'Gate: policy parity (in-app = site repo = deployed)', 'auto', '{policy_url}'),
     ('gate_priv1', 'Gate: PRIV-1 AI request fields = Data safety list = policy', 'auto', '`{priv1_builder}`'),
     ('gate_sdk', 'Gate: no analytics/crash SDK; new direct deps acknowledged', 'auto', '`pubspec` vs `{baseline}`'),
-    ('cut', '`Version {version}` marker (VERSION → name + code)', 'auto, **on your go**', '`{rc}`'),
+    ('cut', '`Version {version}` marker, after the audit gate (cadence + delta review)', 'auto, **on your go**',
+     '`{rc}`'),
     ('changelog', 'Changelog + Play release notes (≤ {notes_limit} chars)', 'auto', 'this tracker'),
     ('gate_secrets', 'Gate: reviewer hash from `release.local.yaml`; no App Check debug token', 'auto', 'local config + Gradle guard'),
     ('build', 'Signed AAB built and verified (signer, id, version, hash)', 'auto', '`{aab_rel}`'),
@@ -250,6 +253,13 @@ class Tracker:
         start, end = self.section_bounds(header)
         self.lines[start + 1:end] = [''] + body.strip().splitlines() + ['']
         self.save()
+
+    def ensure_section(self, header: str, before: str) -> None:
+        """Adds an empty section to a tracker made before the template had it."""
+        if header in self.lines:
+            return
+        at = self.lines.index(before) if before in self.lines else len(self.lines)
+        self.lines[at:at] = [header, '', '_None._', '']
 
     def append_section(self, header: str, line: str) -> None:
         body = self.section(header)
@@ -560,6 +570,101 @@ def gate_sdk(ctx: Ctx, tracker: Tracker | None) -> str:
     return f'no denied SDK; {len(new)} new direct dep(s) since {base}' + (f', acknowledged: {", ".join(new)}' if new else '')
 
 
+# The audit gate (code-audit skill): the cut waits until the code it stamps has been reviewed
+# since the last cut, and until a scored re-audit is not overdue. pray-app 1.0b11 → 1.0b19: 643
+# commits with no audit between them took the score 4.7 → 4.0, every ungated rule decaying.
+
+AUDIT_NOT_CONFIGURED = 'audit gate: not configured'
+REVIEW_HEADER = '## Delta review'
+REVIEW_LINE = re.compile(r'^- `([0-9a-f]{7,40})` — ')
+
+
+def audit_config(ctx: Ctx) -> dict | None:
+    return (ctx.cfg.get('gates') or {}).get('audit')
+
+
+def audit_sha(g: dict) -> str:
+    sha = str(g.get('last_audit_sha', '')).strip()
+    if not re.fullmatch(r'[0-9a-f]{7,40}', sha):
+        raise Stop('gates.audit.last_audit_sha is unreadable', f'"{sha}" is not a commit sha.',
+                   'Set it to the last scored audit\'s remediation close, quoted if it is all digits.')
+    return sha
+
+
+def numstat_lines(numstat: str) -> int:
+    """Insertions + deletions in `git log --numstat` output; binary files ("-") count as none."""
+    total = 0
+    for line in numstat.splitlines():
+        added, deleted, *_ = line.split('\t') + ['', '']
+        if added.isdigit() and deleted.isdigit():
+            total += int(added) + int(deleted)
+    return total
+
+
+def cadence_verdict(commits: int, lines: int, g: dict, sha: str) -> str:
+    max_c, max_l = int(g['max_commits']), int(g['max_lines_changed'])
+    limits = f'limits {max_c:,} / {max_l:,}'
+    if commits > max_c or lines > max_l:
+        raise Stop('A scored re-audit is owed',
+                   f'{commits:,} commits / {lines:,} lines under {", ".join(g["paths"])} since the audit at '
+                   f'{sha} ({limits}).',
+                   'Run the code-audit skill on this RC, land its remediation, then set '
+                   'gates.audit.last_audit_sha to the re-measured commit.')
+    return f'audit cadence: {commits:,} commits, {lines:,} lines since {sha} ({limits})'
+
+
+def audit_cadence(ctx: Ctx) -> str:
+    """Stops once `gates.audit.paths` churned past either limit since the last scored audit."""
+    g = audit_config(ctx)
+    if not g:
+        return AUDIT_NOT_CONFIGURED
+    sha = audit_sha(g)
+    wt = ctx.wt()
+    if git(wt, 'rev-list', '--count', sha, '--not', 'HEAD', check=False) != '0':
+        raise Stop('The last audit is not on this branch', f'{sha} is unknown here or not an ancestor of HEAD.',
+                   'Set gates.audit.last_audit_sha to the audit\'s commit in this RC\'s history.')
+    commits = int(git(wt, 'rev-list', '--count', '--no-merges', f'{sha}..HEAD', '--', *g['paths']))
+    lines = numstat_lines(git(wt, 'log', '--no-merges', '--numstat', '--format=', f'{sha}..HEAD', '--',
+                              *g['paths']))
+    return cadence_verdict(commits, lines, g, sha)
+
+
+def delta_reviews(section: str) -> list[str]:
+    """The reviewed shas in § Delta review, oldest first."""
+    return [m.group(1) for line in section.splitlines() if (m := REVIEW_LINE.match(line.strip()))]
+
+
+def delta_review_ok(ctx: Ctx, tracker: Tracker | None) -> str:
+    """Stops unless § Delta review names HEAD, or a commit with nothing under the paths changed since."""
+    g = audit_config(ctx)
+    if not g:
+        return AUDIT_NOT_CONFIGURED
+    now = head(ctx)
+    body = tracker.section(REVIEW_HEADER) if tracker and REVIEW_HEADER in tracker.lines else ''
+    reviews = delta_reviews(body)
+    for sha in reversed(reviews):
+        if sha.startswith(now) or now.startswith(sha):
+            return f'delta review @ {now}'
+        if not git(ctx.wt(), 'diff', '--name-only', sha, 'HEAD', '--', *g['paths']):
+            return f'delta review @ {sha[:8]}; nothing under {", ".join(g["paths"])} changed up to {now}'
+    try:
+        base = baseline_ref(ctx)
+    except Stop:
+        base = '<previous marker>'
+    why = (f'The newest entry in § Delta review is {reviews[-1][:8]}; code under {", ".join(g["paths"])} '
+           f'changed between it and HEAD {now}.' if reviews else f'§ Delta review has no entry; HEAD is {now}.')
+    raise Stop('The delta review is missing or stale', why,
+               f'Review {base}..HEAD (built-in /code-review at high effort, or a fresh agent against the '
+               'clean-code rubric), fix or record every finding, then: '
+               f'release.py review {ctx.version} "<evidence>"')
+
+
+def audit_gate(ctx: Ctx, tracker: Tracker | None) -> str:
+    if not audit_config(ctx):
+        return AUDIT_NOT_CONFIGURED
+    return f'{audit_cadence(ctx)}; {delta_review_ok(ctx, tracker)}'
+
+
 # --------------------------------------------------------------------------------------------
 # Steps (each returns evidence, or raises Stop / Wait). Each checks its own postcondition first.
 # --------------------------------------------------------------------------------------------
@@ -790,10 +895,11 @@ def step_cut(ctx: Ctx, t: Tracker) -> str:
     current = vf.read_text().splitlines()[0].strip()
     if sha and current == ctx.version:
         return f'`Version {ctx.version}` = {sha}; versionCode {version_code(ctx.version)}'
+    audit = audit_gate(ctx, t)
     base = baseline_ref(ctx)
     log = git(ctx.wt(), 'log', '--no-merges', '--format=  %h %s', f'{base}..HEAD')
     raise Wait(f'''Step {STEP_NO["cut"]} — Cut `Version {ctx.version}`                     (Who: auto, on your go)
-VERSION reads {current}. Gates 9–11 are green, so the cut is ready. Commits since {base}:
+VERSION reads {current}. Gates 9–11 are green; {audit}. The cut is ready. Commits since {base}:
 {log or "  (none)"}
 Say "cut {ctx.version}" to make the marker (it changes VERSION only), or name fixes to pick first.''')
 
@@ -1263,11 +1369,14 @@ def cmd_cut(ctx: Ctx, go: bool) -> int:
         print('Refused: the cut needs the operator\'s go (`--go`).')
         return 2
     try:
+        require_worktree(ctx)
+        audit = '' if marker_sha(ctx) else audit_gate(ctx, t)   # before anything writes VERSION
         sha = do_cut(ctx)
     except Stop as s:
         print(f'⛔ {s.what}\nWhy: {s.why}\nFix: {s.fix}')
         return 1
-    t.set(n, DONE, f'`Version {ctx.version}` = {sha}; versionCode {version_code(ctx.version)}')
+    t.set(n, DONE, f'`Version {ctx.version}` = {sha}; versionCode {version_code(ctx.version)}'
+          + (f'; {audit}' if audit else ''))
     commit_records(ctx, f'docs(release): {ctx.version} cut at {sha}')
     show(t)
     return 0
@@ -1317,6 +1426,28 @@ def cmd_ack(ctx: Ctx, package: str, why: str) -> int:
     if t.status(STEP_NO['gate_sdk']) == BLOCKED:
         t.set(STEP_NO['gate_sdk'], OPEN, '')
     commit_records(ctx, f'docs(release): {ctx.version} acknowledge {package}')
+    show(t)
+    return 0
+
+
+def cmd_review(ctx: Ctx, evidence: str) -> int:
+    t = load(ctx)
+    evidence = ' '.join(evidence.split())
+    if len(evidence) < 20:
+        print('Say what was reviewed and what came of it, e.g. "/code-review high v1.0b19..HEAD: '
+              '6 findings, 5 fixed (abc1234), 1 recorded in open-items".')
+        return 2
+    try:
+        require_worktree(ctx)
+        sha = head(ctx)
+    except Stop as s:
+        print(f'⛔ {s.what}\nWhy: {s.why}\nFix: {s.fix}')
+        return 1
+    t.ensure_section(REVIEW_HEADER, before='## Changelog')
+    t.append_section(REVIEW_HEADER, f'- `{sha}` — {evidence} ({dt.date.today().isoformat()})')
+    if t.status(STEP_NO['cut']) == BLOCKED:
+        t.set(STEP_NO['cut'], OPEN, '')
+    commit_records(ctx, f'docs(release): {ctx.version} delta review at {sha}')
     show(t)
     return 0
 
@@ -1450,7 +1581,7 @@ def cmd_gate(ctx: Ctx, which: str) -> int:
         require_worktree(ctx)
         t = Tracker(ctx) if ctx.tracker.exists() else None
         out = {'policy': lambda: gate_policy(ctx), 'priv1': lambda: gate_priv1(ctx),
-               'sdk': lambda: gate_sdk(ctx, t)}[which]()
+               'sdk': lambda: gate_sdk(ctx, t), 'audit': lambda: audit_gate(ctx, t)}[which]()
         print(f'✅ {which}: {out}')
         return 0
     except Stop as s:
@@ -1478,6 +1609,9 @@ def main() -> int:
     a.add_argument('version')
     a.add_argument('package')
     a.add_argument('why')
+    rv = sub.add_parser('review')
+    rv.add_argument('version')
+    rv.add_argument('evidence')
     pr = sub.add_parser('promote')
     pr.add_argument('version')
     pr.add_argument('--to', required=True)
@@ -1486,7 +1620,7 @@ def main() -> int:
     sub.add_parser('readout').add_argument('version')
     g = sub.add_parser('gate')
     g.add_argument('version')
-    g.add_argument('which', choices=['policy', 'priv1', 'sdk'])
+    g.add_argument('which', choices=['policy', 'priv1', 'sdk', 'audit'])
     g.add_argument('--worktree', help='check this checkout instead of the release worktree')
     args = p.parse_args()
 
@@ -1511,6 +1645,8 @@ def main() -> int:
         return cmd_cherry_pick(ctx, args.shas)
     if args.cmd == 'ack':
         return cmd_ack(ctx, args.package, args.why)
+    if args.cmd == 'review':
+        return cmd_review(ctx, args.evidence)
     if args.cmd == 'promote':
         return cmd_promote(ctx, args.to, args.fraction, args.go)
     if args.cmd == 'gate':
