@@ -61,6 +61,12 @@ So the default disposition of any rule you are tempted to write down:
   tenant, a flag flipped in CI), or the code grows past the recipe and nobody notices.
   *pray-app: the content-locale hook was a one-line constant for ten weeks; three prose checks
   written in that time were English-only, each noting it in a code comment nobody re-read.*
+- **A priced trade gets a ratchet.** When a review or audit keeps a trade — a long class, a
+  locator call in widgets, a bare catch — freeze its measure in a shrink-only test that reads the
+  number from the tree. Raising the frozen number is a commit whose body says why, never a
+  silent edit. *pray-app `1.0b11` → `1.0b19`: the rules the first audit made tests drifted by
+  zero; the trades it priced in prose (the locator, the god classes, silent catches) all grew,
+  and the score fell 4.7 → 4.0.*
 - **Prose keeps only the judgement calls** — when to split, what a seam is worth, which trade to
   price. Those cannot be executed, which is exactly why they earn the words.
 - Adding a paragraph to a skill that was already ignored repeats the failure. If a rule was

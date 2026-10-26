@@ -40,6 +40,8 @@ So: finish the work, report that the build is ready, and **state the marker is n
 
 Typical operator-requested moments: stamping the code state a device test actually exercised, or cutting the next beta before handing it over.
 
+**An operator's "cut" is not a pass on the gates.** The marker still waits for the privacy gate (below) and the audit gate (play-release § Gates): a delta review of the code since the last marker, and a scored re-audit once the code has churned past the configured limits.
+
 Between markers, all work stays ordinary conventional commits — those need no special permission beyond the project's normal commit policy. Finding-fix rounds get a fix plan with a tracker (see `execution-planning`); the tracker is ticked per fix, and the next marker's changelog is read straight off it when the operator calls for it.
 
 ## Privacy-policy gate — before every cut (beta or release)
@@ -55,6 +57,7 @@ Once an app's privacy policy and store listing (Play Data safety form, etc.) are
 
 - **Operator-requested only** (above) — the one rule that overrides convenience.
 - **Run the privacy-policy gate (above) on every cut** — beta or release; a policy change blocks the marker until the store and hosted policy match.
+- **The marker waits for the audit gate exactly as it waits for the privacy gate** → play-release § Gates (*Audit*). A version stamps reviewed code, not just tested code: pray-app went 643 commits from `1.0b11` to `1.0b19` without one, and its audit score fell 4.7 → 4.0.
 - One marker per tested build — never reuse or amend a version number that reached a device.
 - The marker commit contains **only** the VERSION bump; fixes never ride in it.
 - **Wire the build to read VERSION** (below) so the string a marker stamps is the one a device reports. Until a project does, its app version is a separate concern the marker commit doesn't touch — but that leaves builds unidentifiable on-device, which defeats the point of stamping them.

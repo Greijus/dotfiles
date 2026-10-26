@@ -126,7 +126,26 @@ Carry three columns: **was · predicted · measured after**. Where measured part
 something: pray's LSP hit 4.5 rather than 5 because the fakes got *larger* — the 150-line target
 was the wrong metric for the right goal, and duplicated *rules* were the actual defect.
 
-## 10. Defer decisions, don't guess them
+## 10. Between audits — keeping the score
+
+pray-app scored 4.7 at `1.0b11` and 4.0 at `1.0b19`, 643 commits later. Every rule the first
+audit turned into a test held; every rule it left as prose or a priced trade decayed. So the
+remediation does not end at the re-score — it leaves the score defended:
+
+- **The measurement table becomes a command.** The remediation ships `tool/audit_metrics` (it
+  prints the table's numbers from the tree) and a ratchet test for every priced trade's measure,
+  shrink-only (`clean-code` § Enforce it). The next audit's *now* column is a run, not a reading.
+- **The cut is gated.** play-release's audit gate (§ Gates, *Audit*) refuses the `Version` marker
+  without a delta review of the code since the last release, and refuses it outright once the
+  audited paths have churned past the `gates.audit` limits since `last_audit_sha` — until a
+  re-audit lands. When a remediation closes with its *measured after* column, move
+  `last_audit_sha` to the re-measured commit in the same change.
+- **The delta review is the orchestrator's per-landing `/code-review`, added up.** Each lane
+  already lands reviewed; the review at the cut covers the whole range and whatever landed
+  outside a lane.
+- A re-audit is a procedure you run when the gate says so, not a hope.
+
+## 11. Defer decisions, don't guess them
 
 Close with a decisions table — **recommendation first, alternative stated**, one row per call
 that is the operator's alone: content and theological judgements, product copy, scope-widening,
