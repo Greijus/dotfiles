@@ -11,6 +11,7 @@ checkable moves here, and prose keeps the judgement calls.
 |---|---|---|
 | `block-history-damage.py` | `PreToolUse` · Bash | **Refuses** the two operations that damage history irreversibly: a commit carrying the forbidden co-author trailer (inline `-m`, or hidden in a `-F` message file), and a squash merge. Both are absolute in CLAUDE.md, and both are a two-token check. |
 | `require-testlock.py` | `PreToolUse` · Bash | **Refuses** checkout work (`flutter test/build/run/install/pub/analyze/…`, `dart test/run/pub`, `gradlew`) and device work (`flutter run/install/drive/attach`, any `adb` that is not read-only) unless it runs inside `testlock run`, or this session holds a live `testlock` lease. Parallel sessions otherwise collide on the one device and on a checkout's `build/`. See `device-verification` § Sharing the device and the checkout. |
+| `guard-operator-rulings.py` | `PreToolUse` · Bash | **Refuses** a `git commit` whose diff removes or rewrites a line tagged `operator ruling <id> <YYYY-MM-DD>` unless the body carries `Operator ruling changed: <id>, asked <YYYY-MM-DD>` for each such id. Reversing a recorded ruling is the operator's call. See `clean-code` § A ruling becomes a test that names it. |
 | `review-before-stop.sh` | `Stop` | One self-review pass against `checklist.md` before the turn ends. |
 
 ## Tokenize, don't grep
@@ -50,6 +51,19 @@ session lease takes no slot (`testlock run slots -- …` is the wrapper for that
 
 `python3 hooks/test_require_testlock.py` — 43 cases, both directions.
 
+## The ruling guard reads the diff the commit will make
+
+`guard-operator-rulings.py` runs `git diff -U0` for what the commit takes — the index, the
+tracked tree for `-a`, the named paths for a pathspec commit, `HEAD^` as the base for `--amend`
+— in the directory that `cd` and `git -C` lead to. Only a removed tagged line counts, and not
+one re-added verbatim (a move or a re-indent). The tag needs an id and a date, so prose that
+merely mentions an operator ruling never trips it. Messages are read from `-m`, `-F`, a reused
+commit (`-C`/`-c`) and, on `--amend`, HEAD. Known hole, accepted: a `git add` in the same
+command as the commit has not run yet when the hook reads the index — one command per call.
+*Why:* pray-app `3cb6230d` reversed the R9-4 ruling and pinned the reversal in a test, unasked.
+
+`python3 hooks/test_guard_operator_rulings.py` — 21 cases on throwaway repos, both directions.
+
 ## The Stop hook is deliberately scoped
 
 It fires only when the **working tree changed since the last review in this session** — keyed on
@@ -81,7 +95,9 @@ the second machine needs this block added by hand:
     { "matcher": "Bash",
       "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/block-history-damage.py" }] },
     { "matcher": "Bash",
-      "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/require-testlock.py", "timeout": 10 }] }
+      "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/require-testlock.py", "timeout": 10 }] },
+    { "matcher": "Bash",
+      "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/guard-operator-rulings.py", "timeout": 15 }] }
   ],
   "Stop": [
     { "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/review-before-stop.sh",
