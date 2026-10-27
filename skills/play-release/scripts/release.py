@@ -576,7 +576,10 @@ def gate_sdk(ctx: Ctx, tracker: Tracker | None) -> str:
 
 AUDIT_NOT_CONFIGURED = 'audit gate: not configured'
 REVIEW_HEADER = '## Delta review'
-REVIEW_LINE = re.compile(r'^- `([0-9a-f]{7,40})` — ')
+REVIEW_LINE = re.compile(r'^- `([0-9a-f]{7,40})` — (.*)')
+DIFF_RANGE = re.compile(r'\w[\w./-]*\.\.\.?\w[\w./^~-]*')
+DIFF_REVIEW_RULE = ('A delta review reads the diff: name its range (<sha|tag>..<sha|tag>) or the '
+                    '/code-review run. A structural re-audit or a score is not one.')
 
 
 def audit_config(ctx: Ctx) -> dict | None:
@@ -629,9 +632,20 @@ def audit_cadence(ctx: Ctx) -> str:
     return cadence_verdict(commits, lines, g, sha)
 
 
-def delta_reviews(section: str) -> list[str]:
-    """The reviewed shas in § Delta review, oldest first."""
-    return [m.group(1) for line in section.splitlines() if (m := REVIEW_LINE.match(line.strip()))]
+def delta_reviews(section: str) -> list[tuple[str, str]]:
+    """The (sha, evidence) entries in § Delta review, oldest first."""
+    return [m.groups() for line in section.splitlines() if (m := REVIEW_LINE.match(line.strip()))]
+
+
+def not_a_diff_review(evidence: str) -> str | None:
+    """Why `evidence` is not a delta review, or None when it names a review of the diff.
+
+    A structural re-audit is not a delta review: pray-app 1.0b20's entry was the re-audit
+    `17ef2032`, and the R20-1.2 prompt diff that dropped a verse reference was never read.
+    """
+    if DIFF_RANGE.search(evidence) or '/code-review' in evidence:
+        return None
+    return f'it names no diff review. {DIFF_REVIEW_RULE}'
 
 
 def delta_review_ok(ctx: Ctx, tracker: Tracker | None) -> str:
@@ -641,7 +655,8 @@ def delta_review_ok(ctx: Ctx, tracker: Tracker | None) -> str:
         return AUDIT_NOT_CONFIGURED
     now = head(ctx)
     body = tracker.section(REVIEW_HEADER) if tracker and REVIEW_HEADER in tracker.lines else ''
-    reviews = delta_reviews(body)
+    entries = delta_reviews(body)
+    reviews = [sha for sha, evidence in entries if not not_a_diff_review(evidence)]
     for sha in reversed(reviews):
         if sha.startswith(now) or now.startswith(sha):
             return f'delta review @ {now}'
@@ -651,12 +666,17 @@ def delta_review_ok(ctx: Ctx, tracker: Tracker | None) -> str:
         base = baseline_ref(ctx)
     except Stop:
         base = '<previous marker>'
-    why = (f'The newest entry in § Delta review is {reviews[-1][:8]}; code under {", ".join(g["paths"])} '
-           f'changed between it and HEAD {now}.' if reviews else f'§ Delta review has no entry; HEAD is {now}.')
+    if reviews:
+        why = (f'The newest diff review in § Delta review is {reviews[-1][:8]}; code under '
+               f'{", ".join(g["paths"])} changed between it and HEAD {now}.')
+    elif entries:
+        why = f'No entry in § Delta review names a diff review; HEAD is {now}. {DIFF_REVIEW_RULE}'
+    else:
+        why = f'§ Delta review has no entry; HEAD is {now}.'
     raise Stop('The delta review is missing or stale', why,
                f'Review {base}..HEAD (built-in /code-review at high effort, or a fresh agent against the '
                'clean-code rubric), fix or record every finding, then: '
-               f'release.py review {ctx.version} "<evidence>"')
+               f'release.py review {ctx.version} "{base}..HEAD: <what came of it>"')
 
 
 def audit_gate(ctx: Ctx, tracker: Tracker | None) -> str:
@@ -1466,6 +1486,9 @@ def cmd_review(ctx: Ctx, evidence: str) -> int:
     if len(evidence) < 20:
         print('Say what was reviewed and what came of it, e.g. "/code-review high v1.0b19..HEAD: '
               '6 findings, 5 fixed (abc1234), 1 recorded in open-items".')
+        return 2
+    if problem := not_a_diff_review(evidence):
+        print(f'Not recorded: {problem}')
         return 2
     try:
         require_worktree(ctx)

@@ -112,7 +112,8 @@ class DeltaReviewLines(unittest.TestCase):
         body = ('- `aaaaaaaa` — /code-review high v1.0b19..HEAD: 3 findings, 3 fixed (2026-10-26)\n'
                 'free text that is not an entry\n'
                 '- `bbbbbbbb` — re-review after the fix (2026-10-27)')
-        self.assertEqual(release.delta_reviews(body), ['aaaaaaaa', 'bbbbbbbb'])
+        self.assertEqual([sha for sha, _ in release.delta_reviews(body)], ['aaaaaaaa', 'bbbbbbbb'])
+        self.assertEqual(release.delta_reviews(body)[1][1], 're-review after the fix (2026-10-27)')
 
     def test_placeholder_has_no_entries(self):
         self.assertEqual(release.delta_reviews('_None._'), [])
@@ -124,23 +125,23 @@ class DeltaReviewOk(unittest.TestCase):
             return release.delta_review_ok(ctx(), Tracker(body))
 
     def test_review_at_head_passes(self):
-        out = self.run_gate('- `aaaaaaaa` — review (2026-10-26)', head='aaaaaaaa')
+        out = self.run_gate('- `aaaaaaaa` — v1.0b19..HEAD reviewed (2026-10-26)', head='aaaaaaaa')
         self.assertEqual(out, 'delta review @ aaaaaaaa')
 
     def test_review_behind_head_with_no_code_change_passes(self):
-        out = self.run_gate('- `bbbbbbbb` — review (2026-10-26)', head='aaaaaaaa', changed={'bbbbbbbb': ''})
+        out = self.run_gate('- `bbbbbbbb` — v1.0b19..HEAD reviewed (2026-10-26)', head='aaaaaaaa', changed={'bbbbbbbb': ''})
         self.assertEqual(out, 'delta review @ bbbbbbbb; nothing under mobile/lib changed up to aaaaaaaa')
 
     def test_review_behind_head_with_code_change_stops(self):
         with self.assertRaises(Stop) as cm:
-            self.run_gate('- `bbbbbbbb` — review (2026-10-26)', head='aaaaaaaa',
+            self.run_gate('- `bbbbbbbb` — v1.0b19..HEAD reviewed (2026-10-26)', head='aaaaaaaa',
                           changed={'bbbbbbbb': 'mobile/lib/a.dart'})
         self.assertEqual(cm.exception.what, 'The delta review is missing or stale')
         self.assertIn('Review v1.0b19..HEAD', cm.exception.fix)
         self.assertIn('release.py review 1.0b20', cm.exception.fix)
 
     def test_newest_matching_entry_wins(self):
-        body = '- `cccccccc` — old (2026-10-20)\n- `bbbbbbbb` — new (2026-10-26)'
+        body = '- `cccccccc` — /code-review high, old (2026-10-20)\n- `bbbbbbbb` — /code-review high, new (2026-10-26)'
         out = self.run_gate(body, head='aaaaaaaa', changed={'cccccccc': 'mobile/lib/a.dart', 'bbbbbbbb': ''})
         self.assertTrue(out.startswith('delta review @ bbbbbbbb'))
 
@@ -152,6 +153,36 @@ class DeltaReviewOk(unittest.TestCase):
     def test_tracker_without_the_section_stops(self):
         with self.assertRaises(Stop):
             self.run_gate(None)
+
+    def test_a_re_audit_at_head_is_not_a_delta_review(self):
+        with self.assertRaises(Stop) as cm:
+            self.run_gate('- `aaaaaaaa` — structural re-audit, score 4.3 (2026-10-26)', head='aaaaaaaa')
+        self.assertIn('names a diff review', cm.exception.why)
+
+    def test_an_older_diff_review_still_counts_past_a_newer_re_audit(self):
+        body = ('- `bbbbbbbb` — v1.0b19..bbbbbbbb reviewed (2026-10-25)\n'
+                '- `aaaaaaaa` — re-audit, score 4.3 (2026-10-26)')
+        out = self.run_gate(body, head='aaaaaaaa', changed={'bbbbbbbb': ''})
+        self.assertTrue(out.startswith('delta review @ bbbbbbbb'))
+
+
+class NotADiffReview(unittest.TestCase):
+    def test_a_range_of_tags_or_shas_is_a_diff_review(self):
+        for evidence in ('fresh agent, clean-code rubric, v1.0b19..HEAD: 2 findings fixed',
+                         'read 17ef2032..513ae88f, nothing found', 'v1.0b19...v1.0b20 diff read'):
+            self.assertIsNone(release.not_a_diff_review(evidence), evidence)
+
+    def test_a_code_review_run_is_a_diff_review(self):
+        self.assertIsNone(release.not_a_diff_review('/code-review high: 4 findings, 4 fixed'))
+
+    def test_a_structural_re_audit_is_refused(self):
+        problem = release.not_a_diff_review('structural re-audit 17ef2032: score 4.3, 2 findings')
+        self.assertIn('names no diff review', problem)
+        self.assertIn('<sha|tag>..<sha|tag>', problem)
+        self.assertIn('re-audit or a score is not one', problem)
+
+    def test_an_ellipsis_is_not_a_range(self):
+        self.assertIsNotNone(release.not_a_diff_review('re-audit done... score holds at 4.3'))
 
 
 class NotConfigured(unittest.TestCase):
