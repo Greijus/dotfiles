@@ -40,6 +40,10 @@ A screen can be right for the wrong reason. Prove the thing underneath:
 
 *An operator-reported scroll defect was measured as "88 px of 100 — no regression" from a smooth synthetic swipe read end-to-end, and the report was nearly written off. Hand-driven motion events reproduced it on the first try: the offset was oscillating between two values and accumulating nothing. **Both halves of that measurement were wrong, and each alone would have been enough to miss it.** When a report and a measurement disagree, suspect the measurement first — the operator has the real input device.*
 
+## Verify the whole output, not the changed part
+
+A pass criterion lists **every user-visible property of the product contract the screen shows**, not only the one the fix touched. **Paste the contract's checklist into the pass** and mark each line against the screen; a summary ("the reference shows") is how the rest of the screen goes unread. *pray-app: R10-17 closed on the heading alone (`fcfa4a8b`) while the prose under it followed the slot, not the clock; R20-4.2, "the reference in an AI prayer", checked only the opening's (`d7258d8b`) while the same prayers showed the woven verse bare.*
+
 ## Device state is evidence
 
 - **Do not replace the installed build while verifications are pending.** Reflashing destroys the evidence the operator was about to read. Ask before flashing anything.
