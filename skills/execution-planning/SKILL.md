@@ -147,6 +147,16 @@ Do NOT load: <sibling rounds>, <unrelated docs>
 
 A fresh-context agent otherwise either re-derives the spec location from prose scattered across the round file, or slurps sibling rounds/docs it doesn't need. Two lines, not a new section.
 
+**An item that answers the operator quotes them; it never paraphrases them into a rule:**
+
+```
+Operator (<date>): "<their words, verbatim>"
+Call: <the agent's reading of them>
+Beyond the ask: <each thing the remedy adds past the quote — surveyed, or flagged in the landing report>
+```
+
+"Operator" is written in a plan, a doc or a commit message only before a verbatim quote. A remedy that reverses or narrows a recorded operator ruling is the operator's call: survey before the lane spawns (`operator-surveys`). *pray-app: `3cb6230d` reversed the R9-4 ruling "the daypart stays a pure wall-clock read" unasked; `49209383` added "add no other chapter and verse anywhere" and credited it to the operator. Both shipped as regressions.*
+
 Two ways a Spec is not actually frozen, both of which cost a lane:
 
 - **It contains an undecided product call, or two sections that contradict each other.** Never spawn a lane on one — ask the operator and settle it first. Guessing wastes the lane whichever way you guess. *One round lost a full rebuild to a spec whose § Behaviour and § Settings disagreed; the wrong reading was built first.*

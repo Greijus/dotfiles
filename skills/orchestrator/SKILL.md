@@ -61,6 +61,12 @@ Assign each lane a model matched to the work's difficulty:
 - **No `Co-Authored-By:` trailer, and no squashing** — repeat both verbatim in every brief. A
   spawned agent follows its harness defaults unless the brief overrides them, and these are the
   two that silently violate the operator's history.
+- **Carry the operator's words, not your summary of them.** A lane that answers an operator
+  request gets the item's `Operator (<date>): "<verbatim>"` · `Call:` · `Beyond the ask:` lines
+  (`execution-planning` § Task anatomy), and the brief says: *list in your report anything you
+  add beyond the quote; write "Operator" in a commit message only before their verbatim words;
+  stop and report instead of changing a recorded operator ruling.* You survey or flag each
+  Beyond-the-ask line when the lane lands.
 - **Agents run their gate in the foreground.** Backgrounded, a lane ends the session with nothing
   committed and failures nobody has read.
 - Your context accumulates lane **summaries and diffs**, not their transcripts.
@@ -149,7 +155,8 @@ wrote the code, never you on your own plan:
   fix-consumers-*then*-swap.
 - **Plan audit** — the plan itself: is every task still executable from Files·Spec·Acceptance by a
   fresh agent? Any sequencing/integration-order hazard? Contracts still complete? Trackers honest
-  (no optimistic ticks, no merged-but-unticked drift)?
+  (no optimistic ticks, no merged-but-unticked drift)? Does every item that answers the operator
+  quote them verbatim, and is every Beyond-the-ask line surveyed or flagged?
 
 **`/code-review ultra` is operator-triggered and billed — you cannot launch it**, so never attempt
 it via Bash or the Skill tool. When a lane earns one (a data migration, a data-loss surface, the

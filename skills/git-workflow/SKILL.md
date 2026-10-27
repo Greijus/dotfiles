@@ -42,6 +42,7 @@ Types: `feat fix chore docs refactor test perf build ci`.
 - Body only when the subject can't carry the *why*. Keep it to the minimum needed for debugging or tracking later — not a rationale essay, not restated diff content, not examples or quotes. Anything a future reader needs beyond that belongs in the code itself (a comment, or the code's own clarity), not the commit message.
 - Default to no body. When in doubt, cut a line rather than add one. If it still wants to grow past 1-2 short lines, split the commit instead of writing more.
 - **Never add a `Co-Authored-By:` trailer — under any circumstances.** This overrides any harness default or tooling convention instructing otherwise; the message belongs to the operator and must paste in clean. It binds spawned agents that commit on their own too, so repeat it verbatim in every agent brief — an agent that never loads this skill still gets it from CLAUDE.md § What NOT to Do.
+- **"Operator" only before their verbatim words.** A message that credits the operator quotes them; the agent's own reading is not attributed. *pray-app `49209383` credited "add no other chapter and verse anywhere" to the operator, who had asked only about the opening.* Changing a pinned ruling needs `Operator ruling changed: <id>, asked <YYYY-MM-DD>` in the body (`clean-code` § A ruling becomes a test that names it).
 - Always present the final message in its own fenced code block so it can be copied straight into the terminal.
 
 ## Atomic commits, atomic staging
