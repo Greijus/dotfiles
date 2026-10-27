@@ -153,4 +153,4 @@ four prose checks, the app-written opening, the reference display and 83 tests w
 
 ## Not covered here
 
-Git workflow → `git-workflow` skill. Figma translation → `figma-to-flutter` skill. SOLID, testing, bug-fix discipline → `clean-code` skill. Proving it on hardware → `device-verification` skill. Backend/Supabase → not yet a skill.
+Git workflow → `git-workflow` skill. Figma translation → `figma-to-flutter` skill. SOLID, testing, bug-fix discipline → `clean-code` skill. Changing an LLM prompt or rule → `clean-code` § A prompt edit is a behaviour change. Proving it on hardware → `device-verification` skill. Backend/Supabase → not yet a skill.

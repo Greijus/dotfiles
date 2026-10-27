@@ -98,6 +98,10 @@ Every bug that reached a device on pray-app and *should* have been caught by an 
 
 When the operator rules on behaviour, pin it in a test whose `reason:` (or a comment on the assertion) carries `operator ruling <id> <YYYY-MM-DD>: "<verbatim quote>"`. Changing or deleting that line is the operator's call, never a fix's: survey first (`operator-surveys`), then put `Operator ruling changed: <id>, asked <YYYY-MM-DD>` in the commit body. **Enforced:** dotfiles `hooks/guard-operator-rulings.py` refuses the commit without that line. *Smell:* a fix's test asserts the opposite of a written ruling. *pray-app `3cb6230d` (2026-08-25) reversed the R9-4 ruling "the daypart stays a pure wall-clock read" to close R10-17, unasked, with `reason: 'the clock must not overrule the slot the user tapped'` — and the bug it locked in shipped from 1.0b10 to 1.0b21.*
 
+### A prompt edit is a behaviour change
+
+One changed rule sentence changes how the model reads the others, and no diff shows that. So an LLM prompt or rule edit is accepted on **whole generated outputs checked against the product's full output contract** — every property, not the one the edit aimed at (pray-app: both verse references, time words against the clock, the close, no quotation marks on the opening). Never on the prompt text, never on snapshots alone: **a snapshot regenerated in the same commit as the rule it pins is not evidence** — it records what the prompt says, not what the model does. The check is a test: a corpus of real model replies run through the service and checked against the whole contract. *pray-app `49209383` (R20-1.2, 2026-10-26) told the model to "add no other chapter and verse anywhere", meaning the opening; it dropped the woven verse's reference in 1.0b20 while the regenerated snapshots and a test pinning the sentence stayed green.*
+
 ## Fixing a bug
 
 A careless fix relocates a defect instead of closing it. On pray-app, *every* device-test round found bugs in the previous round's fixes — the single most expensive pattern in the project.
