@@ -143,6 +143,11 @@ remediation does not end at the re-score — it leaves the score defended:
 - **The delta review covers the whole range** `<previous marker>..HEAD`, not a sum of lane
   reviews: the orchestrator's per-landing `/code-review` catches a lane's own defects, the cut
   review catches what landed outside a lane and what only the combination shows.
+- **A structural re-audit is not a delta review.** This procedure scores the tree; it does not
+  read the diff, so it cannot see a changed prompt sentence. The cut needs both, and play-release
+  refuses delta-review evidence that names no range or `/code-review`. *pray-app 1.0b20: the
+  delta review was the re-audit `17ef2032`; the R20-1.2 prompt diff that dropped the woven
+  verse's reference was never read.*
 - A re-audit is a procedure you run when the gate says so, not a hope.
 
 ## 11. Defer decisions, don't guess them
