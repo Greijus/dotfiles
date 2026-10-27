@@ -173,3 +173,32 @@ class Step12(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CiWaiver(unittest.TestCase):
+    WAIVER = {'until': '2026-11-01', 'reason': 'Actions minutes spent (operator)'}
+    URL = 'https://github.com/o/r/actions/runs/1'
+    LOCAL = '3866 passed, 16 skipped @ 513ae88f'
+
+    def verdict(self, waiver=WAIVER, today='2026-10-27', never_started=True, local=LOCAL):
+        import datetime as dt
+        return release.ci_waiver_verdict(waiver, dt.date.fromisoformat(today), never_started, self.URL, local)
+
+    def test_a_refused_run_is_waived_with_the_local_suite_as_evidence(self):
+        v = self.verdict()
+        self.assertIn('no job ran', v)
+        self.assertIn(self.URL, v)
+        self.assertIn('local 3866 passed, 16 skipped @ 513ae88f', v)
+        self.assertIn('until 2026-11-01', v)
+
+    def test_a_run_that_started_and_failed_is_never_waived(self):
+        self.assertIsNone(self.verdict(never_started=False))
+
+    def test_no_waiver_configured_means_no_waiver(self):
+        self.assertIsNone(self.verdict(waiver=None))
+
+    def test_the_waiver_lapses_on_its_date(self):
+        self.assertIsNone(self.verdict(today='2026-11-01'))
+
+    def test_without_a_local_suite_result_nothing_is_waived(self):
+        self.assertIsNone(self.verdict(local=''))

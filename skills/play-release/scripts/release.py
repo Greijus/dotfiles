@@ -823,6 +823,10 @@ def step_ci(ctx: Ctx, t: Tracker) -> str:
         if r['status'] != 'completed':
             raise Wait(f'CI is {r["status"]} for {ran_at[:8]} ({name}): {r["url"]}. Run again when it finishes.')
         if r['conclusion'] != 'success':
+            waived = ci_waiver_verdict(ctx.cfg['gates'].get('ci_waiver'), dt.date.today(),
+                                       ci_run_never_started(ctx, r), r['url'], t.evidence(STEP_NO['tests']))
+            if waived:
+                return waived
             raise Stop(f'CI {r["conclusion"]} at {ran_at[:8]}', f'{name}: {r["url"]}',
                        'Read the failing job, fix on a fix branch, cherry-pick, and run again.')
         tested.append(ran_at)
@@ -830,6 +834,32 @@ def step_ci(ctx: Ctx, t: Tracker) -> str:
         return f'{", ".join(wanted)} green @ {sha[:8]}'
     return (f'{", ".join(wanted)} green @ {", ".join(sorted({s[:8] for s in tested}))}; '
             f'nothing CI runs for changed up to {sha[:8]}')
+
+
+def ci_run_never_started(ctx: Ctx, run: dict) -> bool:
+    """True when no job of `run` ran a single step: GitHub refused it (billing, spending limit)."""
+    run_id = run['url'].rstrip('/').rsplit('/', 1)[-1]
+    jobs = json.loads(sh(['gh', 'run', 'view', run_id, '--repo', ctx.cfg['app']['github_repo'],
+                          '--json', 'jobs']))['jobs']
+    return bool(jobs) and all(not j.get('steps') for j in jobs)
+
+
+def ci_waiver_verdict(waiver: dict | None, today: dt.date, never_started: bool, url: str,
+                      local_suite: str) -> str | None:
+    """The step's evidence when the operator waived CI and GitHub never ran it, else None.
+
+    `gates.ci_waiver: {until: <date>, reason: <text>}` accepts the local full suite (step 7) in
+    place of CI, and only for a run GitHub refused to start: a run that started and failed is a
+    real failure and still stops. The waiver lapses on its own date.
+    """
+    if not waiver or not never_started or not local_suite.strip():
+        return None
+    until = waiver['until']
+    until = until if isinstance(until, dt.date) else dt.date.fromisoformat(str(until))
+    if today >= until:
+        return None
+    return (f'CI not started ({url}: no job ran); waived until {until.isoformat()} — '
+            f'{waiver["reason"]}: local {local_suite}')
 
 
 def ci_push_paths(ctx: Ctx, name: str) -> list[str] | None:
