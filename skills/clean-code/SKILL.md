@@ -94,6 +94,10 @@ Every bug that reached a device on pray-app and *should* have been caught by an 
 - **Data-driven logic runs over the real shipped corpus**, not a synthetic sample. *Three of 122 real verses carried their own quotation marks; no handwritten fixture did.*
 - **Mutation-verify a guarantee that must never break** (privacy, money, safety): delete the guarantee and prove the test goes red. Otherwise you have a test that passes for the wrong reason.
 
+### A ruling becomes a test that names it
+
+When the operator rules on behaviour, pin it in a test whose `reason:` (or a comment on the assertion) carries `operator ruling <id> <YYYY-MM-DD>: "<verbatim quote>"`. Changing or deleting that line is the operator's call, never a fix's: survey first (`operator-surveys`), then put `Operator ruling changed: <id>, asked <YYYY-MM-DD>` in the commit body. **Enforced:** dotfiles `hooks/guard-operator-rulings.py` refuses the commit without that line. *Smell:* a fix's test asserts the opposite of a written ruling. *pray-app `3cb6230d` (2026-08-25) reversed the R9-4 ruling "the daypart stays a pure wall-clock read" to close R10-17, unasked, with `reason: 'the clock must not overrule the slot the user tapped'` — and the bug it locked in shipped from 1.0b10 to 1.0b21.*
+
 ## Fixing a bug
 
 A careless fix relocates a defect instead of closing it. On pray-app, *every* device-test round found bugs in the previous round's fixes — the single most expensive pattern in the project.
