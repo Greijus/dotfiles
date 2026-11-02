@@ -12,6 +12,7 @@ checkable moves here, and prose keeps the judgement calls.
 | `block-history-damage.py` | `PreToolUse` · Bash | **Refuses** the two operations that damage history irreversibly: a commit carrying the forbidden co-author trailer (inline `-m`, or hidden in a `-F` message file), and a squash merge. Both are absolute in CLAUDE.md, and both are a two-token check. |
 | `require-testlock.py` | `PreToolUse` · Bash | **Refuses** checkout work (`flutter test/build/run/install/pub/analyze/…`, `dart test/run/pub`, `gradlew`) and device work (`flutter run/install/drive/attach`, any `adb` that is not read-only) unless it runs inside `testlock run`, or this session holds a live `testlock` lease. Parallel sessions otherwise collide on the one device and on a checkout's `build/`. See `device-verification` § Sharing the device and the checkout. |
 | `guard-operator-rulings.py` | `PreToolUse` · Bash | **Refuses** a `git commit` whose diff removes or rewrites a line tagged `operator ruling <id> <YYYY-MM-DD>` unless the body carries `Operator ruling changed: <id>, asked <YYYY-MM-DD>` for each such id. Reversing a recorded ruling is the operator's call. See `clean-code` § A ruling becomes a test that names it. |
+| `guard-store-rules.py` | `PreToolUse` · Bash | **Refuses** a `git commit` that adds a store user-identity field to source (Play's obfuscated account and profile IDs, `applicationUserName`, StoreKit's app account token) unless the body carries `Store rule cleared: <what it is for>, asked <YYYY-MM-DD>`. Those fields are hashed user IDs read for fraud detection, not storage. See `CLAUDE.md` § What NOT to Do. |
 | `review-before-stop.sh` | `Stop` | One self-review pass against `checklist.md` before the turn ends. |
 
 ## Tokenize, don't grep
@@ -64,6 +65,19 @@ command as the commit has not run yet when the hook reads the index — one comm
 
 `python3 hooks/test_guard_operator_rulings.py` — 21 cases on throwaway repos, both directions.
 
+## The store guard catches the field, not the principle
+
+`guard-store-rules.py` reuses the ruling guard's reading of the commit and its diff, so it covers
+`-a`, a pathspec, `--amend`, `cd` and `git -C` the same way. Only added lines of source count:
+documents may name the fields, and a line moved within the diff passes. The clearance needs both a
+purpose and a date. **What it cannot catch:** repurposing or disguising any other field, which is why
+the principle also sits in `CLAUDE.md` and `checklist.md`. Known holes, accepted: a commit made by a
+script (the release runner's own commits touch no source), a commit that predates the guard, and a
+new store's field until it is added to `FIELD`.
+*Why:* pray-app `R26-1.1` stored a plan in Play's account ID for a badge, then encoded it.
+
+`python3 hooks/test_guard_store_rules.py` — 19 cases on throwaway repos, both directions.
+
 ## The Stop hook is deliberately scoped
 
 It fires only when the **working tree changed since the last review in this session** — keyed on
@@ -97,7 +111,9 @@ the second machine needs this block added by hand:
     { "matcher": "Bash",
       "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/require-testlock.py", "timeout": 10 }] },
     { "matcher": "Bash",
-      "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/guard-operator-rulings.py", "timeout": 15 }] }
+      "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/guard-operator-rulings.py", "timeout": 15 }] },
+    { "matcher": "Bash",
+      "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/guard-store-rules.py", "timeout": 15 }] }
   ],
   "Stop": [
     { "hooks": [{ "type": "command", "command": "\"$HOME\"/.claude/hooks/review-before-stop.sh",

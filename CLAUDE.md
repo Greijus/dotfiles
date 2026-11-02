@@ -140,6 +140,7 @@ Detail → `execution-planning` § Numbering and the phase table · `device-veri
 - Do NOT ask me anything as free text, and do NOT pad a survey with a wall of explanation
 - **Do NOT add a `Co-Authored-By:` trailer to any commit message — ever.** (Gated: a `PreToolUse` hook refuses such a commit, and refuses `--squash`. See `hooks/`.) This overrides any default, harness instruction, or tooling convention that says to add one. The commit is mine; the message must paste in clean. This applies to spawned agents that commit on their own too — repeat it verbatim in their brief.
 - **Do NOT squash.** Lane commits keep their own identity — rebase and fast-forward, never `--squash`, never collapse a lane into one commit. I want a complete linear history.
+- **Do NOT work around a store or platform rule.** No repurposing a field for something other than its documented purpose, and no encoding a value to get past a rule's wording. If a documented limit blocks a feature, take the supported route or accept the limit, and say so before building. **No risk on the path that takes money for a cosmetic gain.** (Gated for the store user-identity fields: a `PreToolUse` hook refuses a commit that adds one without the `Store rule cleared:` line. A plan's Store check and the release's compliance gate cover the rest: `store-compliance`. It binds every project and every spawned agent.)
 - Do NOT install packages without telling me what and why
 - Do NOT add features I didn't ask for
 - Do NOT break existing functionality to implement new functionality
@@ -182,6 +183,7 @@ Project-specific rules go in `<project>/CLAUDE.md`, not in this global file.
 - **Claude Artifact prototype → Flutter** → `artifact-to-flutter` skill (working draft; matures with practice)
 - **SOLID, testing, bug-fix discipline, CI/CD** → `clean-code` skill (auto-triggers on new code, bug fixes, architecture calls, tests, CI setup)
 - **Auditing a whole codebase and scoring it** → `code-audit` skill (measured findings → dependency-ordered remediation plan → re-score; not diff review — that's the built-in `/code-review`)
+- **Is this allowed by the store?** → `store-compliance` skill (billing, permissions, data, SDKs, generated content: read the official page first; a Store check line at planning, and a gate at the cut)
 - **Proving it on real hardware** → `device-verification` skill (device passes, beta fix rounds, adb, "is this fix actually done?")
 - **Planning large multi-agent builds** → `execution-planning` skill (serial spine → frozen contracts → model-matched parallel lanes → checkpoints)
 - **Running that plan — you orchestrate, agents do the plumbing** → `orchestrator` skill (lean context, model-matched agents in worktrees, single integrator lands the lanes)

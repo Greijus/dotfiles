@@ -6,5 +6,7 @@
 - **Trackers** — plan tables say what actually landed: `⊡` for started, never `☐` for half-built.
 - **Docs** — the spec, comment or map describing the behaviour you changed moved in the same diff.
 - **Delegation** — nothing was committed, pushed or merged that the operator did not ask for.
+- **Store rules** — nothing repurposed or disguised a store or platform field, and nothing risked
+  the paid path for a cosmetic gain. A workaround is named as one to the operator, before building.
 
 If an item here could be a lint, a CI step or a test, move it there and delete the line.
