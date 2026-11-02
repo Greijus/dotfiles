@@ -19,6 +19,10 @@ _None._
 
 _None._
 
+## Store compliance
+
+_None._
+
 ## Changelog
 
 _Drafted at step 13._

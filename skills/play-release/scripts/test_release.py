@@ -15,7 +15,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import release  # noqa: E402
-from errors import Stop  # noqa: E402
+from errors import Stop, Wait  # noqa: E402
 
 AUDIT = {'last_audit_sha': '294c6f3b', 'paths': ['mobile/lib'], 'max_commits': 250,
          'max_lines_changed': 6000}
@@ -43,6 +43,8 @@ class FakeGit:
             return str(self.commits)
         if args[0] == 'log' and '--numstat' in args:
             return self.numstat
+        if args[0] == 'log' and '--grep' in args:
+            return '1111aaaa22223333 Version 1.0b19'
         if args[0] == 'diff':
             return self.changed.get(args[2], '')
         if args[0] == 'tag':
@@ -58,6 +60,121 @@ class Tracker:
     def section(self, header):
         assert header == release.REVIEW_HEADER
         return self.body
+
+
+class BaselineRef(unittest.TestCase):
+    TAGS = 'v1.1b3\nv1.1b2\nv1.0\nv1.0b25'
+
+    def base(self, version, tags=TAGS):
+        fake = FakeGit()
+        context = SimpleNamespace(cfg={'app': {'marker_grep': '^Version '}}, version=version,
+                                  tag=f'v{version}', wt=lambda rel='': Path('/repo'))
+        answer = lambda repo, *args, check=True: tags if args[0] == 'tag' else fake(repo, *args)
+        with mock.patch.object(release, 'git', answer):
+            return release.baseline_ref(context)
+
+    def test_a_beta_is_measured_from_the_previous_marker(self):
+        self.assertEqual(self.base('1.1b4'), '1111aaaa')
+
+    def test_a_release_is_measured_from_the_last_release_past_any_beta_tag(self):
+        self.assertEqual(self.base('1.1'), 'v1.0')
+
+    def test_a_release_is_never_measured_from_its_own_tag(self):
+        self.assertEqual(self.base('1.0', 'v1.0\nv0.9'), 'v0.9')
+
+    def test_a_first_release_falls_back_to_the_marker(self):
+        self.assertEqual(self.base('1.0', ''), '1111aaaa')
+
+
+class TagPush(unittest.TestCase):
+    def run_step(self, version):
+        calls = []
+
+        def fake(repo, *args, check=True):
+            calls.append(args)
+            return ''
+
+        context = SimpleNamespace(version=version, tag=f'v{version}', rc=f'rc/{version}',
+                                  wt=lambda rel='': Path('/repo'))
+        tracker = SimpleNamespace(evidence=lambda n: 'app.aab @ aaaaaaaa')
+        with mock.patch.object(release, 'git', fake), mock.patch.object(release, 'require_worktree'), \
+                mock.patch.object(release, 'head', return_value='aaaaaaaa'), \
+                mock.patch.object(release, 'release_unmoved'), mock.patch.object(release, 'detached', return_value=False):
+            return release.step_tag_push(context, tracker), calls
+
+    def test_a_beta_pushes_its_branch_and_makes_no_tag(self):
+        out, calls = self.run_step('1.1b1')
+        self.assertEqual(out, 'beta, no tag: marker aaaaaaaa; rc/1.1b1 pushed')
+        self.assertEqual(calls, [('push', 'origin', 'HEAD:refs/heads/rc/1.1b1')])
+
+    def test_a_real_release_is_tagged_and_pushed(self):
+        out, calls = self.run_step('1.1')
+        self.assertEqual(out, 'v1.1 → aaaaaaaa; rc/1.1 and tag pushed')
+        self.assertIn(('tag', '-a', 'v1.1', '-m', 'Release 1.1', 'aaaaaaaa'), calls)
+        self.assertIn(('push', 'origin', 'refs/tags/v1.1'), calls)
+
+
+class ComplianceTracker:
+    def __init__(self, body=''):
+        self.lines = [release.COMPLIANCE_HEADER] if body else []
+        self.body = body
+
+    def section(self, header):
+        assert header == release.COMPLIANCE_HEADER
+        return self.body
+
+
+class ComplianceGate(unittest.TestCase):
+    CHECK = '- `bbbbbbbb` — billing changed; https://example.com/rule read 2026-11-02 (2026-11-02)'
+
+    def ctx(self):
+        context = ctx()
+        context.cfg['gates']['compliance'] = {'paths': ['mobile/lib/services/billing']}
+        return context
+
+    def run_gate(self, body='', context=None, **fake):
+        with mock.patch.object(release, 'git', FakeGit(**fake)):
+            return release.compliance_gate(context or self.ctx(), ComplianceTracker(body))
+
+    def test_no_store_surface_changed_passes_without_a_check(self):
+        self.assertEqual(self.run_gate(), 'compliance: no store surface changed since 1111aaaa')
+
+    def test_a_surface_changed_with_no_check_stops_and_names_the_files(self):
+        with self.assertRaises(Stop) as cm:
+            self.run_gate(changed={'1111aaaa': 'mobile/lib/services/billing/a.dart'})
+        self.assertEqual(cm.exception.what, 'A store check is owed')
+        self.assertIn('mobile/lib/services/billing/a.dart', cm.exception.why)
+        self.assertIn('release.py compliance 1.0b20', cm.exception.fix)
+
+    def test_a_check_at_head_passes(self):
+        out = self.run_gate(self.CHECK, head='bbbbbbbb', changed={'1111aaaa': 'a.dart'})
+        self.assertEqual(out, 'store check @ bbbbbbbb')
+
+    def test_a_check_behind_head_with_nothing_changed_since_passes(self):
+        out = self.run_gate(self.CHECK, head='aaaaaaaa', changed={'1111aaaa': 'a.dart', 'bbbbbbbb': ''})
+        self.assertEqual(out, 'store check @ bbbbbbbb; no store surface changed up to aaaaaaaa')
+
+    def test_a_check_behind_head_with_the_surface_changed_since_stops(self):
+        with self.assertRaises(Stop):
+            self.run_gate(self.CHECK, head='aaaaaaaa', changed={'1111aaaa': 'a.dart', 'bbbbbbbb': 'a.dart'})
+
+    def test_an_entry_citing_no_page_does_not_count(self):
+        with self.assertRaises(Stop):
+            self.run_gate('- `bbbbbbbb` — looked fine to me (2026-11-02)', head='bbbbbbbb',
+                          changed={'1111aaaa': 'a.dart'})
+
+    def test_evidence_must_cite_a_page(self):
+        self.assertIn('cites no page', release.not_a_store_check('checked it, all good'))
+        self.assertIsNone(release.not_a_store_check('https://example.com/rule read 2026-11-02'))
+
+    def test_a_project_with_no_paths_is_skipped(self):
+        self.assertEqual(self.run_gate(context=ctx()), 'compliance gate: not configured')
+
+    def test_the_cut_runs_both_gates(self):
+        with mock.patch.object(release, 'audit_gate', return_value='audit ok'), \
+                mock.patch.object(release, 'compliance_gate', side_effect=Stop('owed', 'why', 'fix')):
+            with self.assertRaises(Stop):
+                release.cut_gates(self.ctx(), None)
 
 
 class NumstatLines(unittest.TestCase):
@@ -137,7 +254,7 @@ class DeltaReviewOk(unittest.TestCase):
             self.run_gate('- `bbbbbbbb` — v1.0b19..HEAD reviewed (2026-10-26)', head='aaaaaaaa',
                           changed={'bbbbbbbb': 'mobile/lib/a.dart'})
         self.assertEqual(cm.exception.what, 'The delta review is missing or stale')
-        self.assertIn('Review v1.0b19..HEAD', cm.exception.fix)
+        self.assertIn('Review 1111aaaa..HEAD', cm.exception.fix)
         self.assertIn('release.py review 1.0b20', cm.exception.fix)
 
     def test_newest_matching_entry_wins(self):
@@ -200,6 +317,37 @@ class Step12(unittest.TestCase):
         self.assertEqual(len(release.STEPS), 24)
         self.assertEqual(release.STEP_NO['cut'], 12)
         self.assertIn('after the audit gate (cadence + delta review)', release.STEPS[11][1])
+
+
+class SignInDirections(unittest.TestCase):
+    """The operator can reach App access from the guide alone (Jorge, 2026-10-28)."""
+
+    def guide(self):
+        c = SimpleNamespace(cfg={'app': {'name': 'PRAY'},
+                                 'manual': {'sign_in': {'name': 'PRAY+ reviewer code', 'limit': 500,
+                                                        'code_length': 20}}})
+        with mock.patch.object(release, 'require_worktree'), \
+                mock.patch.object(release, 'changed_inputs', return_value=[]), \
+                mock.patch.object(release, 'state_rows', return_value=[]), \
+                mock.patch.object(release, 'sign_in_text', return_value='Enter <REVIEWER CODE>'):
+            with self.assertRaises(Wait) as w:
+                release.step_sign_in(c, None)
+        return w.exception.guide
+
+    def test_names_the_menu_path_and_the_search_shortcut(self):
+        g = self.guide()
+        self.assertIn('Policy and programs → App content', g)
+        self.assertIn('"App access" in the search bar', g)
+        self.assertIn('Actioned', g)
+
+    def test_edits_the_existing_entry_before_adding_one(self):
+        g = self.guide()
+        self.assertIn('if "PRAY+ reviewer code" is listed, open it with the', g)
+        self.assertIn('+ Add instructions', g)
+
+    def test_saving_is_not_sending_for_review(self):
+        self.assertIn(f'Do NOT\n         click "Send for review" here; that is step {release.STEP_NO["publish"]}',
+                      self.guide())
 
 
 if __name__ == '__main__':

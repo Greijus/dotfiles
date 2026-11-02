@@ -40,8 +40,9 @@ A new app needs a `release.config.yaml` (copy PRAY's and change the values), a
 | `cherry-pick <v> <sha>…` | brings a fix into the release; reopens every code step after it |
 | `ack <v> <package> "<why>"` | accepts a new direct dependency for the SDK gate |
 | `review <v> "<evidence>"` | records the delta review of the code at HEAD in § Delta review, for the audit gate. Evidence is what the review did and what came of it: `/code-review high v1.0b19..HEAD: 6 findings, 5 fixed (<shas>), 1 recorded in open-items`. Refused unless it names a diff range (`<sha\|tag>..<sha\|tag>`) or `/code-review` |
+| `compliance <v> "<evidence>"` | records the store check of the diff at HEAD in § Store compliance, for the compliance gate. Evidence says what changed and what the official page says, with its link: `v1.0..HEAD billing: <what changed>; https://… read 2026-11-02: <what it says>; disclosures unchanged`. Refused unless it cites an `https://` page |
 | `promote <v> --to <track> --fraction <0–1> --go` | moves the uploaded build between tracks |
-| `gate <v> policy\|priv1\|sdk\|audit [--worktree DIR]` | runs one gate without touching the tracker |
+| `gate <v> policy\|priv1\|sdk\|audit\|compliance [--worktree DIR]` | runs one gate without touching the tracker |
 | `readout <v>` | reads tracks, app details, store listing + image counts, and subscriptions from Play (read-only: the edit is deleted) into `play-console-state.md` § Play readout, with what the listing still lacks |
 
 **Source column.** Every tracker row and every state row says where its evidence came from:
@@ -74,8 +75,8 @@ release worktree · fixes to cherry-pick. 5–8 verify: `dart format` + l10n reg
 with no diff · `flutter analyze` · full `flutter test` · CI green at that commit — or, when the
 workflow filters `on.push.paths`, at the newest earlier commit with nothing under those paths
 changed since (a docs-only commit gets no run of its own). 9–11 privacy gates. 12 the cut,
-**on go**, refused until the audit gate passes. 13 changelog + release notes. 14 secrets gate.
-15 signed AAB, verified. 16 tag and push. 17 upload to the internal track. 18–21 operator
+**on go**, refused until the audit and compliance gates pass. 13 changelog + release notes. 14 secrets gate.
+15 signed AAB, verified. 16 push the branch, and tag a real release: **a beta gets no tag** (operator, 2026-11-02), its `Version` marker identifies it, and tags name only what reaches production. 17 upload to the internal track. 18–21 operator
 checks: the phone on the Play-installed build · Firebase · declarations flagged for re-check ·
 Sign in details. 22 promote, **on go**. 23 send for review / publish, **on go**. 24 close.
 
@@ -88,9 +89,11 @@ Sign in details. 22 promote, **on go**. 23 send for review / publish, **on go**.
 - **PRIV-1:** the `request.*` fields the prompt builder reads must equal the `priv1` block in `play-console-state.md`, and every phrase must appear in the policy. A new field stops the release: update both policy copies and Data safety, and do the consent re-ask.
 - **Audit** (`gates.audit`; skipped as "not configured" without it), checked at step 12 before VERSION is written:
   - *cadence:* commits and lines changed (insertions + deletions) under `paths` since `last_audit_sha`, on the RC's history. Past `max_commits` or `max_lines_changed`, the cut stops until a scored re-audit (`code-audit`) lands its remediation and `last_audit_sha` moves to the re-measured commit;
-  - *delta review:* § Delta review must name HEAD, or a commit with nothing under `paths` changed since. Review `<last release>..HEAD` (built-in `/code-review` at high effort, or a fresh agent against the `clean-code` rubric), fix or record every finding, then `review`.
+  - *delta review:* § Delta review must name HEAD, or a commit with nothing under `paths` changed since. Review `<baseline>..HEAD`: a beta's baseline is the previous marker, a real release's the last real release (built-in `/code-review` at high effort, or a fresh agent against the `clean-code` rubric), fix or record every finding, then `review`.
   *A structural re-audit is not a delta review:* `review` refuses, and the gate skips, an entry that names no range and no `/code-review`. The diff includes prompt and content changes — they are behaviour (`clean-code` § A prompt edit is a behaviour change).
   *Why:* pray-app went 643 commits from `1.0b11` to `1.0b19` with no audit between. Every rule the first audit had made a test held; every rule left as prose decayed, and the score fell 4.7 → 4.0. And 1.0b20's delta review was the re-audit `17ef2032`: the R20-1.2 prompt diff, which dropped the woven verse's reference, was never read.
+- **Compliance** (`gates.compliance.paths`; skipped as "not configured" without it), checked at step 12 with the audit gate: if a store-regulated file changed since the baseline, the cut stops until § Store compliance holds an entry at HEAD, or at a commit with no such file changed since, that cites an official page. Run the `store-compliance` skill on the diff, then `compliance`. A project lists its billing, manifest and dependency files.
+  *Why:* pray-app `R26-1.1`: two code reviews improved a repurposed Play field, and neither asked what the field was for. A delta review of these paths reads the same skill.
 - **CI waiver** (step 8): `gates.ci_waiver: {until, reason}` accepts step 7's local full suite in place of CI, but only for a run GitHub never started (billing, spending limit) and only before `until`. A run that started and failed still stops. Set it only on the operator's call, with a date; the evidence names the refused run. *Why:* pray-app 1.0b21 (2026-10-27) hit the spent Actions allowance at the cut.
 - **SDK:** no package matching `gates.sdk.deny` anywhere in `pubspec.lock`. Every new direct dependency since the last release needs an `ack`.
 - **Secrets:** the reviewer hash comes from `release.local.yaml`, is never printed, and must agree with `cross_check_files`. The Gradle debug-token guard must be present, and no debug token may be in the environment.

@@ -13,10 +13,11 @@ truth: every status change is written there first, then printed.
     release.py cut     <version> --go            make the Version marker (step 12), once the audit
                                                  gate passes
     release.py review  <version> <evidence>      record the delta review of the code at HEAD (step 12)
+    release.py compliance <version> <evidence>   record the store check of the diff at HEAD (step 12)
     release.py cherry-pick <version> <sha>...    bring a fix into the release worktree
     release.py ack     <version> <package> <why> accept a new direct dependency (step 11)
     release.py promote <version> --to <track> --fraction <0-1> --go
-    release.py gate    <version> <policy|priv1|sdk|audit>   run one gate against the release worktree,
+    release.py gate    <version> <policy|priv1|sdk|audit|compliance>   run one gate against the release worktree,
                                                  without touching the tracker
     release.py readout <version>                 read tracks, listing, images and subscriptions
                                                  from Play (read-only) into the state file
@@ -66,7 +67,7 @@ STEPS = [
     ('changelog', 'Changelog + Play release notes (≤ {notes_limit} chars)', 'auto', 'this tracker'),
     ('gate_secrets', 'Gate: reviewer hash from `release.local.yaml`; no App Check debug token', 'auto', 'local config + Gradle guard'),
     ('build', 'Signed AAB built and verified (signer, id, version, hash)', 'auto', '`{aab_rel}`'),
-    ('tag_push', 'Tag `{tag}` at the built commit; push branch + tag', 'auto', 'origin'),
+    ('tag_push', 'Push the branch; tag `{tag}` if a real release, a beta keeps its marker', 'auto', 'origin'),
     ('upload', 'Upload to the `{upload_track}` track + release notes', 'auto', 'Play Developer API'),
     ('phone', 'Phone check on the Play-installed build', 'me', 'phone + Firebase + Cloud console'),
     ('firebase', 'Firebase checks: AI monitoring off, spend caps, prepay balance', 'me', 'Firebase / Cloud console'),
@@ -360,19 +361,29 @@ def release_unmoved(ctx: Ctx) -> None:
                    '(ask the operator before resetting anything).')
 
 
+def is_beta(version: str) -> bool:
+    return re.fullmatch(r'\d+\.\d+b\d+', version) is not None
+
+
 def baseline_ref(ctx: Ctx) -> str:
-    """The last release: the newest `v*` tag reachable from the RC, else the previous marker."""
+    """What this version is measured from: a beta, the previous marker; a release, the last release.
+
+    Only real releases are tagged (operator, 2026-11-02), so a beta measured from a tag would
+    re-review every beta before it. A release's notes cover everything since the last release.
+    """
     tags = git(ctx.wt(), 'tag', '--merged', 'HEAD', '--sort=-creatordate', '--list', 'v*', check=False)
-    for t in tags.splitlines():
-        if t.strip() and t.strip() != ctx.tag:
-            return t.strip()
+    releases = [t.strip() for t in tags.splitlines() if t.strip() and not is_beta(t.strip().removeprefix('v'))]
+    if not is_beta(ctx.version):
+        for t in releases:
+            if t != ctx.tag:
+                return t
     markers = git(ctx.wt(), 'log', '--format=%H %s', '--grep', ctx.cfg['app']['marker_grep'], 'HEAD')
     for line in markers.splitlines():
         sha, subject = line.split(' ', 1)
         if subject.strip() != f'Version {ctx.version}':
             return sha[:8]
     raise Stop('No baseline', 'No earlier release tag or Version marker on this branch.',
-               'Tag the last release (`git tag v<version> <sha>`) and run again.')
+               'Tag the last real release (`git tag v<version> <sha>`) and run again.')
 
 
 def marker_sha(ctx: Ctx) -> str | None:
@@ -685,6 +696,49 @@ def audit_gate(ctx: Ctx, tracker: Tracker | None) -> str:
     return f'{audit_cadence(ctx)}; {delta_review_ok(ctx, tracker)}'
 
 
+# The compliance gate (store-compliance skill): a release that changes a store-regulated surface
+# waits for a check against the store's own page. pray-app R26-1.1: two code reviews improved a
+# repurposed Play field, and neither asked what the field was for.
+
+COMPLIANCE_NOT_CONFIGURED = 'compliance gate: not configured'
+COMPLIANCE_HEADER = '## Store compliance'
+COMPLIANCE_RULE = ('A store check cites the official page it read (an https:// link) and what came '
+                   'of it. See the store-compliance skill.')
+
+
+def not_a_store_check(evidence: str) -> str | None:
+    """Why `evidence` is not a store check, or None when it cites a page."""
+    return None if 'https://' in evidence else f'it cites no page. {COMPLIANCE_RULE}'
+
+
+def compliance_gate(ctx: Ctx, tracker: Tracker | None) -> str:
+    """Stops when `gates.compliance.paths` changed since the last release with no store check."""
+    g = (ctx.cfg.get('gates') or {}).get('compliance')
+    if not g:
+        return COMPLIANCE_NOT_CONFIGURED
+    paths, base, now = g['paths'], baseline_ref(ctx), head(ctx)
+    changed = git(ctx.wt(), 'diff', '--name-only', base, 'HEAD', '--', *paths)
+    if not changed:
+        return f'compliance: no store surface changed since {base}'
+    body = tracker.section(COMPLIANCE_HEADER) if tracker and COMPLIANCE_HEADER in tracker.lines else ''
+    checks = [sha for sha, evidence in delta_reviews(body) if not not_a_store_check(evidence)]
+    for sha in reversed(checks):
+        if sha.startswith(now) or now.startswith(sha):
+            return f'store check @ {now}'
+        if not git(ctx.wt(), 'diff', '--name-only', sha, 'HEAD', '--', *paths):
+            return f'store check @ {sha[:8]}; no store surface changed up to {now}'
+    raise Stop('A store check is owed',
+               f'These store-regulated files changed since {base}, with no store check at HEAD {now}:\n'
+               f'{changed}\n{COMPLIANCE_RULE}',
+               f'Run the store-compliance skill on {base}..HEAD, then: '
+               f'release.py compliance {ctx.version} "{base}..HEAD: <what changed>; <URL> read <date>: '
+               '<what it says>; <disclosures>"')
+
+
+def cut_gates(ctx: Ctx, tracker: Tracker | None) -> str:
+    return f'{audit_gate(ctx, tracker)}; {compliance_gate(ctx, tracker)}'
+
+
 # --------------------------------------------------------------------------------------------
 # Steps (each returns evidence, or raises Stop / Wait). Each checks its own postcondition first.
 # --------------------------------------------------------------------------------------------
@@ -945,7 +999,7 @@ def step_cut(ctx: Ctx, t: Tracker) -> str:
     current = vf.read_text().splitlines()[0].strip()
     if sha and current == ctx.version:
         return f'`Version {ctx.version}` = {sha}; versionCode {version_code(ctx.version)}'
-    audit = audit_gate(ctx, t)
+    audit = cut_gates(ctx, t)
     base = baseline_ref(ctx)
     log = git(ctx.wt(), 'log', '--no-merges', '--format=  %h %s', f'{base}..HEAD')
     raise Wait(f'''Step {STEP_NO["cut"]} — Cut `Version {ctx.version}`                     (Who: auto, on your go)
@@ -1095,19 +1149,23 @@ def step_tag_push(ctx: Ctx, t: Tracker) -> str:
     if head(ctx) != sha:
         raise Stop('The worktree moved after the build', f'Built {sha}, worktree is at {head(ctx)}.',
                    'Rebuild (reset steps from the build on) — a tag must name what was built.')
-    existing = git(ctx.wt(), 'rev-parse', '--verify', '--quiet', f'refs/tags/{ctx.tag}^{{commit}}', check=False)
+    tagged = not is_beta(ctx.version)
+    existing = tagged and git(ctx.wt(), 'rev-parse', '--verify', '--quiet', f'refs/tags/{ctx.tag}^{{commit}}', check=False)
     if existing and not existing.startswith(sha):
         raise Stop(f'{ctx.tag} already exists elsewhere', f'{ctx.tag} points at {existing[:8]}, not {sha}.',
                    'A published version is never moved. Use a new version.')
     release_unmoved(ctx)
-    if not existing:
+    if tagged and not existing:
         git(ctx.wt(), 'tag', '-a', ctx.tag, '-m', f'Release {ctx.version}', sha)
     git(ctx.wt(), 'push', 'origin', f'HEAD:refs/heads/{ctx.rc}')   # fast-forward only: never forced
-    git(ctx.wt(), 'push', 'origin', f'refs/tags/{ctx.tag}')
+    if tagged:
+        git(ctx.wt(), 'push', 'origin', f'refs/tags/{ctx.tag}')
     note = ''
     if detached(ctx):
         # The local branch is open in the operator's folder: never move it under them.
         note = (f'; your folder on {ctx.rc} is behind origin — run `git merge --ff-only origin/{ctx.rc}` there')
+    if not tagged:
+        return f'beta, no tag: marker {sha}; {ctx.rc} pushed{note}'
     return f'{ctx.tag} → {sha}; {ctx.rc} and tag pushed{note}'
 
 
@@ -1211,7 +1269,9 @@ def step_declarations(ctx: Ctx, t: Tracker) -> str:
         return f'nothing to re-check (inputs unchanged since {baseline_ref(ctx)})'
     items = '\n'.join(f'  - {r["name"]}: now "{r["answer"]}" — because {"; ".join(w)}' for r, w in flagged)
     raise Wait(f'''Step {STEP_NO["declarations"]} — Play Console declarations to re-check      (Who: me)
-Where:   Play Console › {ctx.cfg["app"]["name"]} › Policy › App content
+Where:   play.google.com/console → All apps → {ctx.cfg["app"]["name"]} → left menu, near the
+         bottom: Policy and programs → App content (or search the declaration's name in the
+         search bar at the top). Tabs: "Needs attention" and "Actioned"; each card → Manage.
 Check each, one at a time:
 {items}
 Done when: each page shows the answer you intend, saved.
@@ -1246,14 +1306,24 @@ def step_sign_in(ctx: Ctx, t: Tracker) -> str:
                    'Shorten `manual.sign_in.text` in release.config.yaml, then run again.')
     count = f'[{length}/{limit} with the code]' if limit else f'[{length} chars; check the field\'s limit]'
     raise Wait(f'''Step {STEP_NO["sign_in"]} — Sign in details                              (Who: me)
-Where:   Play Console › {ctx.cfg["app"]["name"]} › Policy › App content › App access › Manage
-         → "All or some functionality is restricted" → Add instructions
+Where:   1. play.google.com/console → All apps → {ctx.cfg["app"]["name"]}.
+         2. Left menu, near the bottom: Policy and programs → App content.
+            Shortcut: type "App access" in the search bar at the top of Play Console.
+         3. App content has two tabs, "Needs attention" and "Actioned". Once set, App
+            access is under Actioned → its card → Manage.
+         4. Keep "All or some functionality in my app is restricted" selected.
+         5. Under Instructions: if "{ctx.cfg["manual"]["sign_in"]["name"]}" is listed, open it with the
+            pencil (edit) icon; if nothing is listed, + Add instructions.
 Enter:   Name: {ctx.cfg["manual"]["sign_in"]["name"]}
+         Username / Password: leave blank (no account; the code is the access).
          Any other information (replace <REVIEWER CODE> with the code from your
          release.local.yaml; never paste the code into chat):
 ---
 {text}
 ---  {count}
+         Apply / Save in the dialog, then Save at the bottom of App access. Do NOT
+         click "Send for review" here; that is step {STEP_NO["publish"]}.
+         If a menu differs from this text, say what you see so these directions get fixed.
 Done when: the instructions are saved and App access shows them.
 Give back: "sign in done" and today's date.''')
 
@@ -1420,7 +1490,7 @@ def cmd_cut(ctx: Ctx, go: bool) -> int:
         return 2
     try:
         require_worktree(ctx)
-        audit = '' if marker_sha(ctx) else audit_gate(ctx, t)   # before anything writes VERSION
+        audit = '' if marker_sha(ctx) else cut_gates(ctx, t)   # before anything writes VERSION
         sha = do_cut(ctx)
     except Stop as s:
         print(f'⛔ {s.what}\nWhy: {s.why}\nFix: {s.fix}')
@@ -1501,6 +1571,27 @@ def cmd_review(ctx: Ctx, evidence: str) -> int:
     if t.status(STEP_NO['cut']) == BLOCKED:
         t.set(STEP_NO['cut'], OPEN, '')
     commit_records(ctx, f'docs(release): {ctx.version} delta review at {sha}')
+    show(t)
+    return 0
+
+
+def cmd_compliance(ctx: Ctx, evidence: str) -> int:
+    t = load(ctx)
+    evidence = ' '.join(evidence.split())
+    if problem := not_a_store_check(evidence):
+        print(f'Not recorded: {problem}')
+        return 2
+    try:
+        require_worktree(ctx)
+        sha = head(ctx)
+    except Stop as s:
+        print(f'⛔ {s.what}\nWhy: {s.why}\nFix: {s.fix}')
+        return 1
+    t.ensure_section(COMPLIANCE_HEADER, before='## Changelog')
+    t.append_section(COMPLIANCE_HEADER, f'- `{sha}` — {evidence} ({dt.date.today().isoformat()})')
+    if t.status(STEP_NO['cut']) == BLOCKED:
+        t.set(STEP_NO['cut'], OPEN, '')
+    commit_records(ctx, f'docs(release): {ctx.version} store check at {sha}')
     show(t)
     return 0
 
@@ -1634,7 +1725,8 @@ def cmd_gate(ctx: Ctx, which: str) -> int:
         require_worktree(ctx)
         t = Tracker(ctx) if ctx.tracker.exists() else None
         out = {'policy': lambda: gate_policy(ctx), 'priv1': lambda: gate_priv1(ctx),
-               'sdk': lambda: gate_sdk(ctx, t), 'audit': lambda: audit_gate(ctx, t)}[which]()
+               'sdk': lambda: gate_sdk(ctx, t), 'audit': lambda: audit_gate(ctx, t),
+               'compliance': lambda: compliance_gate(ctx, t)}[which]()
         print(f'✅ {which}: {out}')
         return 0
     except Stop as s:
@@ -1665,6 +1757,9 @@ def main() -> int:
     rv = sub.add_parser('review')
     rv.add_argument('version')
     rv.add_argument('evidence')
+    sc = sub.add_parser('compliance')
+    sc.add_argument('version')
+    sc.add_argument('evidence')
     pr = sub.add_parser('promote')
     pr.add_argument('version')
     pr.add_argument('--to', required=True)
@@ -1673,7 +1768,7 @@ def main() -> int:
     sub.add_parser('readout').add_argument('version')
     g = sub.add_parser('gate')
     g.add_argument('version')
-    g.add_argument('which', choices=['policy', 'priv1', 'sdk', 'audit'])
+    g.add_argument('which', choices=['policy', 'priv1', 'sdk', 'audit', 'compliance'])
     g.add_argument('--worktree', help='check this checkout instead of the release worktree')
     args = p.parse_args()
 
@@ -1700,6 +1795,8 @@ def main() -> int:
         return cmd_ack(ctx, args.package, args.why)
     if args.cmd == 'review':
         return cmd_review(ctx, args.evidence)
+    if args.cmd == 'compliance':
+        return cmd_compliance(ctx, args.evidence)
     if args.cmd == 'promote':
         return cmd_promote(ctx, args.to, args.fraction, args.go)
     if args.cmd == 'gate':
