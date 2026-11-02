@@ -138,6 +138,8 @@ it is *right now*:
 
 ## Audit gates
 
+**Before spawning a lane on a store-regulated surface, check its task has a `Store check:` line (`execution-planning` § Task anatomy, `store-compliance`). No line, no spawn.**
+
 Integration checkpoints prove the slice *works*; audit gates prove it's *sound*. Run both at each
 checkpoint (or on a fixed cadence), each by a **fresh, independent agent** — never the lane that
 wrote the code, never you on your own plan:
@@ -226,12 +228,50 @@ Then state plainly what is *still not true*: the owed device pass, the unanswere
 item that closed at 198 lines against a 150-line target. A round that ends "mostly accurate"
 opens the next one with a reconciliation pass nobody planned.
 
+## Decision authority — agents make no calls
+
+Operator, 2026-10-28: *"considering the recent regressions, no agent should make any own calls,
+they have to communicate and ask for permission of orchestrator, orchestrator ask me or makes the
+calls if I have given it permission."* The regressions it answers: `3cb6230d` reversed a recorded
+ruling unasked, `49209383` widened a prompt rule past the ask and credited it to the operator.
+
+**A lane agent decides nothing the brief does not pin.** It is a *call* if a reviewer could
+reasonably ask "who decided that?" — product behaviour, any user-facing wording, scope past the
+item, a file outside the brief's Files, an expected value the spec does not state, weakening,
+skipping or deleting a test, accepting a failure as a flake, touching a recorded ruling. On a
+call the agent **stops, commits nothing that depends on it, and ends its turn** with:
+
+```
+DECISION NEEDED: <one line>
+Options: A) … B) …   Recommended: <A|B>, because <one line>
+Blocked: <what waits on it>   Not blocked: <what it already finished>
+```
+
+Mechanics are not calls: following the file's existing idiom, naming a private helper, ordering
+imports, fixing a typo the agent itself introduced. When unsure, it is a call.
+
+**The orchestrator answers through `SendMessage`** to the same agent, so its context survives —
+never by spawning a fresh one to redo the work. Before answering it decides who owns the call:
+
+- **The operator delegated it** — a standing permission written in the round file's
+  `Permissions:` line (who, date, verbatim scope). Decide, then record the call under that line:
+  what was decided, under which permission. A permission is never inferred from a past answer to
+  a similar question, and never widened by the orchestrator.
+- **Anything else is the operator's** → one tap-to-answer survey (`operator-surveys`), batched with
+  whatever else is pending; keep the unblocked lanes running meanwhile. The orchestrator applies
+  the same test to its own work: a call it is about to make without a written permission is a
+  survey.
+
+Every brief carries this section's rule **verbatim** — the `DECISION NEEDED` block included —
+because a spawned agent follows its harness defaults, and those default to deciding.
+
 ## Talking to the operator
 
-They are usually watching from a phone. Decisions that are yours, take. Decisions that are
-theirs — irreversible actions, scope changes, product taste — go in a **tap-to-answer survey**,
-never a paragraph and never a closing question mark (`operator-surveys`). Ask, then keep working
-on whatever the answer doesn't block.
+They are usually watching from a phone. Decisions they delegated to you in writing, take
+(§ Decision authority); every other decision — irreversible actions, scope changes, product
+taste, wording, a lane's `DECISION NEEDED` — goes in a **tap-to-answer survey**, never a
+paragraph and never a closing question mark (`operator-surveys`). Ask, then keep working on
+whatever the answer doesn't block.
 
 ## Not covered here
 

@@ -40,7 +40,9 @@ So: finish the work, report that the build is ready, and **state the marker is n
 
 Typical operator-requested moments: stamping the code state a device test actually exercised, or cutting the next beta before handing it over.
 
-**An operator's "cut" is not a pass on the gates.** The marker still waits for the privacy gate (below) and the audit gate (play-release § Gates): a delta review of the code since the last marker, and a scored re-audit once the code has churned past the configured limits.
+**A beta gets a marker, not a tag** (operator, 2026-11-02). Tags name real releases only (`v1.0`, `v1.1`); the marker commit and the sha in `versionName` already identify a beta, and a beta tag cost a second CI run on every cut. So land a marker on the main line: one left only on a dead branch has nothing holding it.
+
+**An operator's "cut" is not a pass on the gates.** The marker still waits for the privacy gate (below) and the audit gate (play-release § Gates): a delta review of the code since the last marker, and a scored re-audit once the code has churned past the configured limits. It waits for the compliance gate too, when a store-regulated file changed (`store-compliance`).
 
 Between markers, all work stays ordinary conventional commits — those need no special permission beyond the project's normal commit policy. Finding-fix rounds get a fix plan with a tracker (see `execution-planning`); the tracker is ticked per fix, and the next marker's changelog is read straight off it when the operator calls for it.
 

@@ -157,6 +157,21 @@ Beyond the ask: <each thing the remedy adds past the quote — surveyed, or flag
 
 "Operator" is written in a plan, a doc or a commit message only before a verbatim quote. A remedy that reverses or narrows a recorded operator ruling is the operator's call: survey before the lane spawns (`operator-surveys`). *pray-app: `3cb6230d` reversed the R9-4 ruling "the daypart stays a pure wall-clock read" unasked; `49209383` added "add no other chapter and verse anywhere" and credited it to the operator. Both shipped as regressions.*
 
+**An item on a store-regulated surface carries a Store check** (billing, permissions, services, user data, SDKs, generated content; the list and the questions are in `store-compliance`):
+
+```
+Store check: <surface> — "<what the official page says it is for>" (<URL>, read <date>).
+Supported route: <this one, or which>. If the store objects: <what fails>. Disclosures: <unchanged, or which>.
+```
+
+Read the page before writing the task, and write the line from it. A plan with such an item and no line is not ready to run, and an orchestrator does not spawn its lane. Where the page does not fit the idea, stop and survey. *pray-app `R26-1.1` stored a plan in Play's account ID for a badge: the line would have failed before any code existed.*
+
+**A lane makes no calls of its own** (operator, 2026-10-28). Whatever the task's Files · Spec ·
+Acceptance does not pin, the lane stops and reports `DECISION NEEDED` to the orchestrator, which
+decides only under a written permission from the operator and otherwise surveys them. Every
+brief carries the rule verbatim — `orchestrator` § Decision authority. A plan whose tasks leave
+calls open costs a round trip per call: pin them in the Spec before the lane spawns.
+
 Two ways a Spec is not actually frozen, both of which cost a lane:
 
 - **It contains an undecided product call, or two sections that contradict each other.** Never spawn a lane on one — ask the operator and settle it first. Guessing wastes the lane whichever way you guess. *One round lost a full rebuild to a spec whose § Behaviour and § Settings disagreed; the wrong reading was built first.*

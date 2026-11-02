@@ -9,7 +9,7 @@ The operator usually monitors long runs from a phone via remote control. He does
 
 ## The rules
 
-1. **First, try not to ask.** Resolve it from the plan, the specs, the code, or sensible defaults. He would rather trust your call than be interrupted. Ask only for: irreversible/destructive actions, genuine scope changes, product taste calls the docs don't answer, or a remedy that reverses or narrows a recorded operator ruling — that one is never yours to decide (*pray-app `3cb6230d` reversed one unasked and shipped the bug it ruled out*).
+1. **First, check whether the call is yours to make.** It is yours only when the answer is already pinned — by the plan, the specs, the code or an existing idiom — or when he has delegated that kind of call in writing (a standing permission, recorded with its date and scope; `orchestrator` § Decision authority). A spawned agent never owns a call: it reports `DECISION NEEDED` to its orchestrator. Everything else is a survey, and these always are: irreversible/destructive actions, genuine scope changes, product taste calls the docs don't answer, or a remedy that reverses or narrows a recorded operator ruling — that one is never yours to decide (*pray-app `3cb6230d` reversed one unasked and shipped the bug it ruled out*).
 2. **Ask with the AskUserQuestion tool** (options + tap-to-answer), never as free text in a message. **This holds everywhere, including the end of a turn.** A question in your closing paragraph — "want me to push?", "shall I continue with X?", "let me know if you'd rather…" — is the same interruption wearing different clothes, and it is *worse* there: it cannot be tapped, so it costs him a typed reply. If you are about to end a message with a question mark, that question is a survey.
 3. **Your recommendation goes first**, labeled `(Recommended)`. If you have no recommendation, you probably haven't thought about it enough to interrupt him.
 4. **Explain super simply, and briefly.** Two or three short sentences of context — the *what* and the *stakes*, in plain language. No jargon, no file paths, no IDs he'd have to look up, no reasoning chain, no recap of how you got here. Write it so it makes sense with zero surrounding context — he may see only the question, not the conversation.
@@ -17,7 +17,7 @@ The operator usually monitors long runs from a phone via remote control. He does
 6. **Each option's description says what happens if he taps it** — the consequence, not the implementation.
 7. **Never write an "Other" option — the tool adds one.** That is his escape hatch: if he wants to discuss, push back, or take a third path, he taps Other and types. So you do *not* need to leave the door open in prose ("let me know if you'd rather…", "happy to explain more") — that sentence is the long explanation sneaking back in.
 8. **Batch questions.** If several decisions are pending, ask them in one survey (up to 4 questions), not a drip of interruptions.
-9. **Don't block on nice-to-knows.** If the answer only affects polish, pick the recommended option yourself, proceed, and report what you chose so he can override later.
+9. **Don't block on nice-to-knows — but don't decide them either.** Survey, and keep working on whatever the answer does not touch. Pick the recommended option yourself only when he has delegated that kind of call in writing (operator, 2026-10-28: *"no agent should make any own calls … orchestrator ask me or makes the calls if I have given it permission"*).
 
 ## Shape of a good question
 
