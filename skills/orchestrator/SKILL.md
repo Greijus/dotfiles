@@ -105,8 +105,9 @@ instead of colliding — but waiting is still the morning gone. Spend the budget
   workflow's push trigger lists `rc/**` and `master` only, and lanes **do not push**: worktrees
   share the repo's refs, so the integrator lands a lane straight from its local branch. A lane
   iterates on its targeted tests and runs the project's local mirror of the CI job **once**, as
-  its final gate, under `testlock run checkout` (pray-app: `bash tool/ci_local.sh`, kept in step
-  with `ci.yml` by a drift test), and reports its tail and its sha. A branch that is red on
+  its final gate, under `testlock run checkout` (pray-app: `./tool/ci_local.sh` — a worktree agent's
+  sandbox refuses `bash <script>` after testlock — kept in step with `ci.yml` by a drift test;
+  if a lane is refused even so, the integrator runs its gate), and reports its tail and its sha. A branch that is red on
   purpose (a language being translated) runs targeted tests only, and the full local gate once,
   when it is complete. The integrator's gate on the rebased tree stays local too, and the pushed
   RC's hosted run is the clean-room check, including the rc-only steps (the APK build proof,
