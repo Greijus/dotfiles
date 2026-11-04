@@ -240,7 +240,11 @@ if [ "$res" = "slots" ]; then
   [ "$cmd" = "run" ] || die "slots are run-held only: testlock run slots --owner WHO -- CMD"
   lock=""
 else
-  lock="$LOCK_ROOT/$(resource_key "$res" "$dir")"
+  # resource_key dies inside $(…), which exits only the subshell: without the `|| exit`, a
+  # non-git -C left lock="$LOCK_ROOT/" and cleanup's rm -rf wiped every live lock (2026-11-04).
+  key="$(resource_key "$res" "$dir")" || exit 2
+  [ -n "$key" ] || die "empty lock name for '$res' in $dir"
+  lock="$LOCK_ROOT/$key"
 fi
 slot=""
 cleanup() { [ -n "$lock" ] && rm -rf "$lock"; [ -n "$slot" ] && rm -rf "$slot"; return 0; }
