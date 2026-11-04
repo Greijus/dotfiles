@@ -130,6 +130,7 @@ Minimal GitHub Actions workflow — lint + test, nothing else, until a real sign
 name: CI
 on:
   push:
+    branches: [main, 'rc/**']   # what ships (`master` where that is the default); lanes gate locally
     # Only what CI checks. Keep docs/plans, trackers and READMEs out — but keep any doc a test reads.
     paths: ['lib/**', 'test/**', 'assets/**', 'android/**', 'pubspec.*', 'analysis_options.yaml', '.github/workflows/**']
   workflow_dispatch:            # "Run workflow": everything, on demand
@@ -150,6 +151,8 @@ jobs:
 Swap the two `flutter` steps for the stack's equivalent on non-Flutter projects (`npm run lint` / `npm test`, `ruff` / `pytest`), and set the same concurrency there: Jest `--maxWorkers="$(nproc)"`, pytest-xdist `-n auto`, Gradle `maxParallelForks = Runtime.getRuntime().availableProcessors()`.
 
 **The defaults, and why** (pray-app, October 2026 — 52 push runs, ~830 runner-minutes over two weeks):
+
+- **Push runs only on the branches that ship.** Hosted minutes go to what ships; a lane gates locally with a script that mirrors the job step for step, kept in step with the workflow by a drift test (pray-app `mobile/tool/ci_local.sh`), and anything else gets a run only through `workflow_dispatch`. *Round 26 spent ~785 of 2,000 free minutes in three days, 84% on lane and language branches (2026-11-04).*
 
 - **Run for changes CI checks, not for every push.** 29 of the 52 runs (51% of the minutes) were pushes that changed only plans and release trackers, and with `cancel-in-progress` each one cancelled the code run before it. `on.push.paths` stops both. List what CI reads: the source, the tests, the build files, the workflow, *and any doc a test opens*. Then **enforce the list with a test**: a lint test reads `on.push.paths` from the workflow and fails on any read outside it (pray-app `mobile/test/lint/ci_paths_test.dart`), so the list cannot go stale silently. Caveat: if branch protection *requires* this check, a path-skipped push leaves it pending forever. Either don't require it or add a trivial always-run job with the same name.
 - **One trigger per commit.** `on: [pull_request, push]` runs every PR commit twice. A solo repo with no PRs needs `push` only. A PR repo uses `pull_request` plus `push: branches: [main]`.

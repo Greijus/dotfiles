@@ -90,7 +90,8 @@ instead of colliding — but waiting is still the morning gone. Spend the budget
   your gate on the integrated tree runs the whole suite again, and that is where an
   order-dependent failure hiding behind "passes alone" gets caught.
 - **Size the wave from `testlock status`, not from the plan.** `slots: n/cap` says how many
-  lanes can gate at once. Spawn no more lanes than the cap plus one, stagger the rest, and put
+  lanes can gate at once — one, on a 4-thread machine, since half the cores are kept free for the
+  operator (operator, 2026-11-04). Spawn no more lanes than the cap plus one, stagger the rest, and put
   the slot line in every brief so the lane expects to wait.
 - **Your gate on the integrated tree is the one that counts**, and you land lanes serially
   anyway — so lane gates are pre-checks, and the `-j` cap is the machine's, not yours to raise.
@@ -98,21 +99,30 @@ instead of colliding — but waiting is still the morning gone. Spend the budget
   project skips by default (pray-app's tagged `research` harnesses) and the build proofs run only
   in CI, so no lane gate sees them: *pray-app round 20 — a lane's locator change broke a research
   probe that 14 green lane gates never ran; the local run of the workflow's steps caught it.*
-- **Hosted CI runs only on the branches a build ships from; lanes gate locally, once.**
-  Operator, 2026-11-04 (survey): *"Hosted on rc/ only"*. *Round 26 spent ~785 of the 2,000 free
-  minutes in three days, 84% of them on lane and language branches whose result never ships —
-  lanes pushing two or three times, and language branches red on purpose until complete.* So the
-  workflow's push trigger lists `rc/**` and `master` only, and lanes **do not push**: worktrees
-  share the repo's refs, so the integrator lands a lane straight from its local branch. A lane
-  iterates on its targeted tests and runs the project's local mirror of the CI job **once**, as
-  its final gate, under `testlock run checkout` (pray-app: `./tool/ci_local.sh` — a worktree agent's
-  sandbox refuses `bash <script>` after testlock — kept in step with `ci.yml` by a drift test;
-  if a lane is refused even so, the integrator runs its gate), and reports its tail and its sha. A branch that is red on
-  purpose (a language being translated) runs targeted tests only, and the full local gate once,
-  when it is complete. The integrator's gate on the rebased tree stays local too, and the pushed
-  RC's hosted run is the clean-room check, including the rc-only steps (the APK build proof,
-  codegen freshness). The cost is laptop time, rationed by `testlock`'s slots — size waves by
-  `testlock status`, as above.
+- **Hosted minutes go to what ships, and to the two big gates while the month can afford them;
+  lanes gate locally, once.** Operator, 2026-11-04 (surveys): *"Hosted on rc/ only"*, then
+  *"Yes, budget-guarded"*. *Round 26 spent ~785 of the 2,000 free minutes in three days, 84% of
+  them on lane and language branches whose result never ships — lanes pushing two or three
+  times, and language branches red on purpose until complete.* So:
+  - **RC and `master` pushes are always hosted.** The workflow's push trigger lists `rc/**` and
+    `master` only, plus `workflow_dispatch`. The pushed RC's run is the clean-room check,
+    including the rc-only steps (the APK build proof, codegen freshness).
+  - **The integrator's full gate on a rebased tree, and a language's completion gate, may go to
+    Actions on demand:** push the branch (no run starts — the trigger does not list it), then
+    `tool/ci_budget.sh --dispatch <branch>`. It dispatches only while month-to-date minutes sit
+    under the pro-rata line 2,000 × day/days-in-month × 0.8 *and* under the 400-minute reserve
+    (1,600 used); otherwise it says `local`, and the gate runs locally under `testlock`. The
+    reserve is never spent on a gate.
+  - **Lanes never push.** Worktrees share the repo's refs, so the integrator lands a lane straight
+    from its local branch. A lane iterates on its targeted tests and runs the project's local
+    mirror of the CI job **once**, as its final gate, under `testlock run checkout` (pray-app:
+    `./tool/ci_local.sh` — a worktree agent's sandbox refuses `bash <script>` after testlock —
+    kept in step with `ci.yml` by a drift test; if a lane is refused even so, the integrator runs
+    its gate), and reports its tail and its sha. A branch that is red on purpose (a language
+    being translated) runs targeted tests only, and its completion gate once, when it is complete.
+  - **Local gates cost laptop time, rationed by `testlock`'s slots** — one slot on the
+    operator's 4-thread laptop, so waves are sized to it: one lane gating at a time, the rest
+    staggered behind it doing work that needs no build.
 - **If even the RC's run cannot answer** — queued past ten minutes, or failed with no step
   started and a billing or spending-limit annotation — the allowance is spent or Actions is down.
   Do not wait it out: gate the RC locally with the same mirror, write one line in the round file
