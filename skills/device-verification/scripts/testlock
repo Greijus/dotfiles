@@ -8,11 +8,16 @@
 #              different checkout, so it has its own lock — that is the escape hatch.
 #   slots      a machine-wide count of heavy runs (flutter, dart, gradlew) in flight. `run` takes
 #              one automatically when CMD is heavy, whatever resource it names; `run slots` takes
-#              one on its own, for a command a lease already covers. Capacity is cores/2 (floor 1,
+#              one on its own, for a command a lease already covers. Capacity is cores/4 (floor 1,
 #              override TESTLOCK_SLOTS), and a slot is also refused while MemAvailable is under
 #              TESTLOCK_SLOT_MB (1024) or the 1-minute load is over TESTLOCK_MAX_LOAD (1.5×cores).
 #              A heavy CMD runs under `nice -n $TESTLOCK_NICE` (10), and a `flutter test` with no
-#              -j of its own gets `-j cores/capacity`, so all slots together fill the machine once.
+#              -j of its own gets `-j (cores/2)/capacity` (floor 1, override TESTLOCK_JOBS), so all
+#              slots together use half the cores, never all of them: the other half stays free for
+#              the operator's own work (a browser, mainly) on a machine that is not powerful
+#              (operator, 2026-11-04). A 4-thread machine gets 1 slot at -j 2.
+#              Only a CMD that is itself flutter, dart or gradlew takes a slot: a script that runs
+#              heavy steps must wrap each one in `testlock run slots` itself.
 #
 # Commands:
 #   testlock status
@@ -49,12 +54,12 @@ load1() { cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0; }
 max_load() { echo "${TESTLOCK_MAX_LOAD:-$(awk -v c="$(cores)" 'BEGIN {printf "%.1f", c * 1.5}')}"; }
 slot_cap() {
   local c
-  c=$(( $(cores) / 2 )); [ "$c" -ge 1 ] || c=1
+  c=$(( $(cores) / 4 )); [ "$c" -ge 1 ] || c=1
   echo "${TESTLOCK_SLOTS:-$c}"
 }
 slot_jobs() {
   local j
-  j=$(( $(cores) / $(slot_cap) )); [ "$j" -ge 1 ] || j=1
+  j=$(( $(cores) / 2 / $(slot_cap) )); [ "$j" -ge 1 ] || j=1
   echo "${TESTLOCK_JOBS:-$j}"
 }
 
@@ -213,7 +218,7 @@ if [ "$cmd" = "status" ]; then
   done
   [ -n "$found" ] || echo "no locks held"
   room="$(machine_room)"
-  echo "slots: $(slots_in_use)/$(slot_cap) in use · MemAvailable $(mem_available_mb) MB (need $SLOT_MB) · load $(load1) (max $(max_load))${room:+ · NO ROOM: $room}"
+  echo "slots: $(slots_in_use)/$(slot_cap) in use · flutter test -j $(slot_jobs) per slot · MemAvailable $(mem_available_mb) MB (need $SLOT_MB) · load $(load1) (max $(max_load))${room:+ · NO ROOM: $room}"
   exit 0
 fi
 
