@@ -98,25 +98,25 @@ instead of colliding — but waiting is still the morning gone. Spend the budget
   project skips by default (pray-app's tagged `research` harnesses) and the build proofs run only
   in CI, so no lane gate sees them: *pray-app round 20 — a lane's locator change broke a research
   probe that 14 green lane gates never ran; the local run of the workflow's steps caught it.*
-- **The lane's full-suite gate runs on CI, not the laptop.** Where the project runs the suite
-  on every push that changes code (pray-app does, and its runner beats the laptop 2× on the
-  suite alone), the lane's brief says: push the lane branch, then `gh run watch` the run it
-  starts, in the foreground, and report its verdict. pray-app's CI filters `on.push.paths`
-  (round 19), so a lane push that changes only docs starts no run — there is nothing to gate,
-  and the brief says so rather than waiting. The laptop never runs a lane's full suite. Only the
-  integrator's gate on the rebased tree stays local, under the slot budget, and the pushed RC's
-  own run backstops it. Landing deletes the remote lane branch too
-  (`git push origin --delete feat/lane-<name>`).
-- **Fallback when CI cannot answer: gate locally, say so, keep going.** CI is unavailable when a
-  run sits `queued` past ten minutes, or fails with no step started and a billing or
-  spending-limit annotation — the free allowance (2,000 min/month on a private repo) is spent,
-  or Actions is down. Do not wait it out: the lane runs its gate locally under
-  `testlock run checkout` exactly as before, and its report names the fallback. You then write
-  one line in the round file — *CI allowance hit on <date>, lanes gating locally* — and survey
-  the operator once about paying for the overage; every lane after that gates locally until the
-  operator answers or the month resets. The next spare-minutes saver is already in the workflow
-  (concurrency cancel, APK only on rc/ and main); check it is still there before assuming the
-  cap was hit for a good reason.
+- **Hosted CI runs only on the branches a build ships from; lanes gate locally, once.**
+  Operator, 2026-11-04 (survey): *"Hosted on rc/ only"*. *Round 26 spent ~785 of the 2,000 free
+  minutes in three days, 84% of them on lane and language branches whose result never ships —
+  lanes pushing two or three times, and language branches red on purpose until complete.* So the
+  workflow's push trigger lists `rc/**` and `master` only, and lanes **do not push**: worktrees
+  share the repo's refs, so the integrator lands a lane straight from its local branch. A lane
+  iterates on its targeted tests and runs the project's local mirror of the CI job **once**, as
+  its final gate, under `testlock run checkout` (pray-app: `bash tool/ci_local.sh`, kept in step
+  with `ci.yml` by a drift test), and reports its tail and its sha. A branch that is red on
+  purpose (a language being translated) runs targeted tests only, and the full local gate once,
+  when it is complete. The integrator's gate on the rebased tree stays local too, and the pushed
+  RC's hosted run is the clean-room check, including the rc-only steps (the APK build proof,
+  codegen freshness). The cost is laptop time, rationed by `testlock`'s slots — size waves by
+  `testlock status`, as above.
+- **If even the RC's run cannot answer** — queued past ten minutes, or failed with no step
+  started and a billing or spending-limit annotation — the allowance is spent or Actions is down.
+  Do not wait it out: gate the RC locally with the same mirror, write one line in the round file
+  — *CI allowance hit on <date>, RC gated locally* — and survey the operator once about paying
+  for the overage.
 
 ### Audit the brief against the live repo before spawning
 
