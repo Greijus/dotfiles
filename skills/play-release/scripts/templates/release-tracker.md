@@ -31,5 +31,11 @@ _Drafted at step 13._
 
 _Drafted at step 13, then rewritten in plain words before the upload._
 
+## Upload settings
+
+In-app update priority: 0
+
+_0 ordinary, 1–3 a flexible ask, 4–5 required. Set before the upload; Play cannot change it after._
+
 ## Log
 

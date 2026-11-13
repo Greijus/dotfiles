@@ -125,10 +125,12 @@ class PlayClient:
     # ---------------------------------------------------------------- operations
 
     def upload_to_track(self, aab: Path, version_code: int, track: str, release_name: str, status: str,
-                        notes: dict[str, str], changes_not_sent_for_review: bool) -> str:
+                        notes: dict[str, str], changes_not_sent_for_review: bool,
+                        in_app_update_priority: int = 0) -> str:
         """Uploads the bundle (unless Play already has this versionCode) and puts it on [track].
 
-        Idempotent: a versionCode already on the track is reported, not re-sent.
+        Idempotent: a versionCode already on the track is reported, not re-sent. The update
+        priority is set only here, when the release is created; Play never lets it change.
         """
         edit = self._edit()
         try:
@@ -151,6 +153,7 @@ class PlayClient:
             release = {
                 'name': release_name, 'versionCodes': [str(version_code)], 'status': status,
                 'releaseNotes': [{'language': lang, 'text': text} for lang, text in notes.items()],
+                'inAppUpdatePriority': in_app_update_priority,
             }
             self._call('PUT', f'{API}/{self.package}/edits/{edit}/tracks/{track}',
                        json={'track': track, 'releases': [release]})
@@ -176,7 +179,8 @@ class PlayClient:
                     self._delete(edit)
                     return f'already on `{target}` at {fraction:.0%} — nothing sent'
             release = {'name': release_name, 'versionCodes': [str(version_code)],
-                       'releaseNotes': found.get('releaseNotes', [])}
+                       'releaseNotes': found.get('releaseNotes', []),
+                       'inAppUpdatePriority': found.get('inAppUpdatePriority', 0)}
             if fraction < 1:
                 release.update(status='inProgress', userFraction=fraction)
             else:

@@ -1169,6 +1169,27 @@ def step_tag_push(ctx: Ctx, t: Tracker) -> str:
     return f'{ctx.tag} → {sha}; {ctx.rc} and tag pushed{note}'
 
 
+UPDATE_PRIORITY_LINE = re.compile(r'^In-app update priority:\s*(.*?)\s*$')
+UPDATE_PRIORITY_MAX = 5
+
+
+def update_priority(t: Tracker) -> int:
+    """The tracker's `In-app update priority:` line; missing means 0 (ordinary)."""
+    for line in t.lines:
+        m = UPDATE_PRIORITY_LINE.match(line)
+        if not m:
+            continue
+        try:
+            value = int(m.group(1))
+        except ValueError:
+            value = -1
+        if not 0 <= value <= UPDATE_PRIORITY_MAX:
+            raise Stop('In-app update priority is not 0–5', f'{t.path} says "{m.group(1)}".',
+                       'Write a whole number from 0 to 5 on the "In-app update priority:" line, then run again.')
+        return value
+    return 0
+
+
 def step_upload(ctx: Ctx, t: Tracker) -> str:
     import play_api
     notes = notes_text(t.section(f'### Play release notes ({ctx.cfg["play"]["release_notes_language"]})'))
@@ -1179,6 +1200,7 @@ def step_upload(ctx: Ctx, t: Tracker) -> str:
                    f'(≤ {limit} characters) and delete the DRAFT line, then run again.')
     if len(notes) > limit:
         raise Stop('Release notes too long', f'{len(notes)} characters; Play allows {limit}.', 'Shorten them.')
+    priority = update_priority(t)
     path = ctx.local_value('play_service_account_json')
     client = play_api.PlayClient(os.path.expanduser(path), ctx.cfg['app']['package'])
     play = ctx.cfg['play']
@@ -1187,8 +1209,10 @@ def step_upload(ctx: Ctx, t: Tracker) -> str:
         aab=ctx.wt(ctx.cfg['build']['aab']), version_code=code, track=play['upload_track'],
         release_name=ctx.version, status=play['upload_status'],
         notes={play['release_notes_language']: notes},
-        changes_not_sent_for_review=play.get('changes_not_sent_for_review', False))
-    return f'versionCode {code} on `{play["upload_track"]}` ({play["upload_status"]}); {result}'
+        changes_not_sent_for_review=play.get('changes_not_sent_for_review', False),
+        in_app_update_priority=priority)
+    return (f'versionCode {code} on `{play["upload_track"]}` ({play["upload_status"]}), '
+            f'in-app update priority {priority}; {result}')
 
 
 def manual(guide_fn):

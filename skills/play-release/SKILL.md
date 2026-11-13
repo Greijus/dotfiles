@@ -65,6 +65,8 @@ tool's `run_in_background`, wait for the completion notice, then show the result
    workaround, and do not mark anything ✅ by hand.
 5. After step 13, **rewrite § Play release notes** in plain words for users: what changed for
    them, no ids, within the limit. Delete the DRAFT line. The upload refuses a draft.
+   Set the tracker's `In-app update priority: <0–5>` line before the upload (missing = 0; 4–5
+   makes the update required); Play fixes it when the release is created and never changes it.
 6. When the operator changes a declaration's answer, edit that row of `play-console-state.md`
    (answer, status). `done` stamps the date.
 

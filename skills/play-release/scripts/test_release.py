@@ -381,3 +381,98 @@ class CiWaiver(unittest.TestCase):
 
     def test_without_a_local_suite_result_nothing_is_waived(self):
         self.assertIsNone(self.verdict(local=''))
+
+
+class UpdatePriorityTracker:
+    def __init__(self, *priority_lines):
+        self.lines = ['## Upload settings', '', *priority_lines]
+        self.path = Path('docs/releases/1.0b20.md')
+
+    def section(self, header):
+        return 'Fixes for you.'
+
+
+class UpdatePriorityLine(unittest.TestCase):
+    def test_the_written_values_are_read(self):
+        for written in (0, 5):
+            tracker = UpdatePriorityTracker(f'In-app update priority: {written}')
+            self.assertEqual(release.update_priority(tracker), written)
+
+    def test_a_missing_line_means_ordinary(self):
+        self.assertEqual(release.update_priority(UpdatePriorityTracker()), 0)
+
+    def test_anything_but_a_whole_number_0_to_5_stops(self):
+        for written in ('6', '-1', 'high', ''):
+            with self.assertRaises(Stop, msg=written):
+                release.update_priority(UpdatePriorityTracker(f'In-app update priority: {written}'))
+
+
+class UploadStepPriority(unittest.TestCase):
+    CFG = {'app': {'package': 'com.example'},
+           'play': {'release_notes_language': 'en-US', 'release_notes_limit': 500,
+                    'upload_track': 'internal', 'upload_status': 'completed'},
+           'build': {'aab': 'app.aab'}}
+
+    def run_step(self, tracker, client):
+        context = SimpleNamespace(cfg=self.CFG, version='1.0b20', wt=lambda rel='': Path('/repo'),
+                                  local_value=lambda key: '/key.json')
+        with mock.patch.dict(sys.modules, {'play_api': SimpleNamespace(PlayClient=client)}):
+            return release.step_upload(context, tracker)
+
+    def test_an_invalid_priority_stops_before_any_play_call(self):
+        client = mock.Mock(side_effect=AssertionError('Play must not be reached'))
+        with self.assertRaises(Stop):
+            self.run_step(UpdatePriorityTracker('In-app update priority: 6'), client)
+        client.assert_not_called()
+
+    def test_the_priority_reaches_the_upload_and_the_summary(self):
+        client = mock.Mock()
+        client.return_value.upload_to_track.return_value = 'edit committed'
+        summary = self.run_step(UpdatePriorityTracker('In-app update priority: 4'), client)
+        self.assertEqual(client.return_value.upload_to_track.call_args.kwargs['in_app_update_priority'], 4)
+        self.assertIn('in-app update priority 4', summary)
+
+
+class PlayRequestPriority(unittest.TestCase):
+    """The release dict PlayClient PUTs carries the priority."""
+
+    def client(self, track_releases):
+        import play_api
+        client = play_api.PlayClient.__new__(play_api.PlayClient)
+        client.package = 'com.example'
+        calls = []
+
+        def call(method, url, **kwargs):
+            calls.append((method, url, kwargs))
+            if method == 'GET' and url.endswith('/bundles'):
+                return {'bundles': [{'versionCode': 7}]}
+            if method == 'GET':
+                return {'releases': track_releases}
+            return {'id': 'edit-1'}
+        client._call = call
+        return client, calls
+
+    def put_release(self, calls):
+        puts = [kwargs for method, _url, kwargs in calls if method == 'PUT']
+        self.assertEqual(len(puts), 1)
+        return puts[0]['json']['releases'][0]
+
+    def test_upload_puts_the_priority_on_the_release(self):
+        client, calls = self.client([])
+        client.upload_to_track(Path('app.aab'), 7, 'internal', '1.0b20', 'completed',
+                               {'en-US': 'Fixes.'}, False, in_app_update_priority=5)
+        self.assertEqual(self.put_release(calls)['inAppUpdatePriority'], 5)
+
+    def test_promote_copies_the_source_releases_priority(self):
+        source = [{'versionCodes': ['7'], 'releaseNotes': [], 'inAppUpdatePriority': 3}]
+        client, calls = self.client(source)
+        with mock.patch.object(client, '_track', side_effect=[{'releases': source}, {'releases': []}]):
+            client.promote(7, 'internal', 'production', '1.0b20', 1.0, False)
+        self.assertEqual(self.put_release(calls)['inAppUpdatePriority'], 3)
+
+    def test_promote_of_an_unprioritised_release_sends_zero(self):
+        source = [{'versionCodes': ['7'], 'releaseNotes': []}]
+        client, calls = self.client(source)
+        with mock.patch.object(client, '_track', side_effect=[{'releases': source}, {'releases': []}]):
+            client.promote(7, 'internal', 'production', '1.0b20', 1.0, False)
+        self.assertEqual(self.put_release(calls)['inAppUpdatePriority'], 0)
