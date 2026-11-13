@@ -149,6 +149,7 @@ Detail → `execution-planning` § Numbering and the phase table · `device-veri
 - Do NOT hardcode configuration values
 - Do NOT leave TODO comments without a linked GitHub issue
 - Run **one command per shell call** wherever practical. Compound chains (`cd X && cmd`, `git add … && git commit …`, other `&&`/`;` sequences) are matched as a single opaque string, so they re-prompt on every variation even when each part is separately allowlisted. `cd` once (the working dir persists between calls), and run each `git add` / `git commit` / `flutter` / `dart` as its own call.
+- **Edit files with the Edit/Write tools — never with a script.** No `python3 - <<'EOF'`, `sed -i`, `perl -pi` or heredoc rewrites of source files. Edit/Write are allowlisted and show me a diff; a script that rewrites files is opaque to the permission check, so it prompts every time and I can't see what it changes. Several similar edits → several Edit calls (or `replace_all`), not a script.
 
 ---
 
@@ -193,7 +194,7 @@ Project-specific rules go in `<project>/CLAUDE.md`, not in this global file.
 ---
 
 > Living document. Update when conventions actually change. When a rule hurts productivity, change it — don't suffer through it.
-> Last reviewed: 2026-08-21 (added § How To Ask Me Things — compact context + tap-to-answer surveys).
+> Last reviewed: 2026-11-10 (added edit-with-tools rule to § What NOT to Do).
 
 ---
 
